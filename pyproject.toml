@@ -1,0 +1,56 @@
+[build-system]
+requires = ["setuptools>=68"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "openwrt-manager-ui"
+version = "0.1.0"
+description = "Open-source, self-hosted network controller UI (Omada/UniFi look-and-feel) for OpenWrt gateways/APs and TP-Link JetStream switches."
+readme = "README.md"
+requires-python = ">=3.11"
+license = { text = "MIT" }
+authors = [{ name = "openwrt-manager-ui contributors" }]
+dependencies = [
+    "Flask>=3.0",
+    "Jinja2>=3.1",
+    "PyYAML>=6.0",
+    "pydantic>=2.6",
+    "Werkzeug>=3.0",
+    "click>=8.1",
+    "APScheduler>=3.10",
+    "gunicorn>=21.2",
+]
+
+[project.optional-dependencies]
+dev = [
+    "pytest>=8.0",
+    "pytest-cov>=4.1",
+    "ruff>=0.4",
+]
+
+[project.scripts]
+omada-ctl = "omada_clone.presentation.cli:main"
+
+[tool.setuptools.packages.find]
+where = ["src"]
+
+[tool.setuptools.package-data]
+"omada_clone.presentation" = [
+    "templates/*.html",
+    "templates/**/*.html",
+    "static/css/*.css",
+    "static/js/*.js",
+]
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]
+pythonpath = ["src"]
+addopts = "-q"
+
+[tool.ruff]
+line-length = 100
+target-version = "py311"
+src = ["src", "tests"]
+
+[tool.ruff.lint]
+select = ["E", "F", "I", "UP", "B"]

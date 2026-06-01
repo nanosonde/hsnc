@@ -1,0 +1,2 @@
+# Runtime data directory.
+# SQLite database and seeded config land here at runtime; contents are gitignored.

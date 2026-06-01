@@ -1,0 +1,21 @@
+{% extends "base.html" %}
+{% block title %}Clients · openwrt-manager-ui{% endblock %}
+{% block content %}
+<div class="card card-pad">
+  <div class="toolbar">
+    <form class="search" hx-get="{{ url_for('clients.index') }}"
+          hx-target="#client-table" hx-trigger="submit, keyup changed delay:400ms from:input[name=search]"
+          hx-indicator="#client-spinner">
+      <svg viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="#8a94a6" stroke-width="2"><circle cx="11" cy="11" r="7"/><path d="M21 21l-4-4"/></svg>
+      <input type="text" name="search" placeholder="Search Name, IP, MAC or network"
+             value="{{ search }}" />
+    </form>
+    <span class="tab active">All ({{ paged.total }})</span>
+    <span id="client-spinner" class="htmx-indicator muted">Loading…</span>
+  </div>
+
+  <div id="client-table">
+    {% include "partials/client_table.html" %}
+  </div>
+</div>
+{% endblock %}

@@ -1,0 +1,64 @@
+{% extends "base.html" %}
+{% block title %}Topology · openwrt-manager-ui{% endblock %}
+{% block content %}
+<div class="card topology">
+  {#
+    Simple layered layout:
+      column 0 = internet, 1 = gateway/device upstream, 2 = switch, 3 = ap/client_group
+    We bucket nodes by kind, then assign coordinates and draw links.
+  #}
+  {% set cols = {'internet': 0, 'controller': 3} %}
+  {% set ns = namespace(seen_switch=false) %}
+
+  {# Pre-compute a column index per node id #}
+  {% set colmap = {} %}
+  {% set ycount = {0: 0, 1: 0, 2: 0, 3: 0} %}
+  {% set pos = {} %}
+
+  {% for n in topology.nodes %}
+    {% if n.kind == 'internet' %}{% set col = 0 %}
+    {% elif n.kind == 'client_group' %}{% set col = 3 %}
+    {% elif n.kind == 'device' and 'gateway' in n.id %}{% set col = 1 %}
+    {% elif n.kind == 'device' and 'switch' in n.id %}{% set col = 2 %}
+    {% else %}{% set col = 3 %}{% endif %}
+    {% set _ = colmap.update({n.id: col}) %}
+    {% set y = ycount[col] %}
+    {% set _ = ycount.update({col: y + 1}) %}
+    {% set _ = pos.update({n.id: {'col': col, 'row': y, 'label': n.label, 'kind': n.kind, 'badge': n.badge}}) %}
+  {% endfor %}
+
+  {% set colx = {0: 90, 1: 360, 2: 360, 3: 700} %}
+  {% set cw = 150 %}{% set ch = 70 %}{% set gap = 30 %}
+
+  <svg viewBox="0 0 920 520" preserveAspectRatio="xMidYMid meet">
+    {# links first #}
+    {% for link in topology.links %}
+      {% set s = pos[link.source_id] %}{% set t = pos[link.target_id] %}
+      {% set sx = colx[s.col] + cw %}
+      {% set sy = 60 + s.row * (ch + gap) + ch/2 %}
+      {% set tx = colx[t.col] %}
+      {% set ty = 60 + t.row * (ch + gap) + ch/2 %}
+      <path class="topo-link"
+            d="M {{ sx }} {{ sy }} C {{ (sx+tx)/2 }} {{ sy }}, {{ (sx+tx)/2 }} {{ ty }}, {{ tx }} {{ ty }}" />
+    {% endfor %}
+
+    {# nodes #}
+    {% for id, p in pos.items() %}
+      {% set x = colx[p.col] %}
+      {% set y = 60 + p.row * (ch + gap) %}
+      {% if p.kind == 'internet' %}
+        <circle cx="{{ x + cw/2 }}" cy="{{ y + ch/2 }}" r="26" fill="#f4f6f8" stroke="#d7dde5"/>
+        <text class="topo-label" x="{{ x + cw/2 }}" y="{{ y + ch + 16 }}" text-anchor="middle">{{ p.label }}</text>
+      {% else %}
+        <rect class="topo-card" x="{{ x }}" y="{{ y }}" width="{{ cw }}" height="{{ ch }}" rx="8"/>
+        <text class="topo-label" x="{{ x + 16 }}" y="{{ y + 40 }}">{{ p.label }}</text>
+        {% if p.badge is not none %}
+          <circle class="topo-badge" cx="{{ x + cw - 16 }}" cy="{{ y + 16 }}" r="11"/>
+          <text class="topo-badge-text" x="{{ x + cw - 16 }}" y="{{ y + 20 }}" text-anchor="middle">{{ p.badge }}</text>
+        {% endif %}
+        <text class="topo-sub" x="{{ x + 16 }}" y="{{ y + 58 }}">{{ p.kind.replace('_',' ') }}</text>
+      {% endif %}
+    {% endfor %}
+  </svg>
+</div>
+{% endblock %}

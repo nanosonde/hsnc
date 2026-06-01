@@ -1,0 +1,29 @@
+"""Clients route with HTMX-driven search and pagination."""
+
+from __future__ import annotations
+
+from flask import Blueprint, current_app, render_template, request
+
+from ..auth import login_required
+
+bp = Blueprint("clients", __name__)
+
+
+def _parse_int(value: str | None, default: int) -> int:
+    try:
+        return int(value) if value is not None else default
+    except (TypeError, ValueError):
+        return default
+
+
+@bp.route("/clients")
+@login_required
+def index():
+    container = current_app.config["CONTAINER"]
+    search = request.args.get("search", "")
+    page = _parse_int(request.args.get("page"), 1)
+    page_size = _parse_int(request.args.get("page_size"), 10)
+    paged = container.list_clients.execute(search=search, page=page, page_size=page_size)
+
+    template = "partials/client_table.html" if request.headers.get("HX-Request") else "clients.html"
+    return render_template(template, paged=paged, search=search, active="clients")

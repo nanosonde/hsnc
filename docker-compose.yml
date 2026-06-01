@@ -1,0 +1,18 @@
+services:
+  controller:
+    build: .
+    image: openwrt-manager-ui:latest
+    container_name: openwrt-manager-ui
+    ports:
+      - "8080:8080"
+    environment:
+      # Change this to a strong random value in production.
+      OMADA_SECRET_KEY: "change-me-in-production"
+      OMADA_USE_MOCK_DEVICES: "1"
+      OMADA_POLL_INTERVAL: "30"
+    volumes:
+      - controller-data:/data
+    restart: unless-stopped
+
+volumes:
+  controller-data:

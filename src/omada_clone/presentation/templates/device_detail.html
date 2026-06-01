@@ -1,0 +1,69 @@
+{% extends "base.html" %}
+{% block title %}{{ detail.row.name }} · openwrt-manager-ui{% endblock %}
+{% block content %}
+<a href="{{ url_for('devices.index') }}" class="muted">&larr; Devices</a>
+
+<div class="card card-pad" style="margin-top:10px">
+  <h3 class="card-title">{{ detail.row.name }}
+    <span class="status {{ detail.row.status }}" style="margin-left:8px">{{ detail.row.status|upper }}</span>
+  </h3>
+  <div class="grid-2">
+    <div>
+      <div><span class="muted">Type:</span> {{ detail.row.kind.replace('_',' ') }}</div>
+      <div><span class="muted">Model:</span> {{ detail.row.model }}</div>
+      <div><span class="muted">MAC:</span> {{ detail.row.mac }}</div>
+    </div>
+    <div>
+      <div><span class="muted">IP:</span> {{ detail.row.ip }}</div>
+      <div><span class="muted">Firmware:</span> {{ detail.row.firmware or '-' }}</div>
+      <div><span class="muted">Uptime:</span> {{ detail.row.uptime }}</div>
+    </div>
+  </div>
+</div>
+
+{% if detail.ssids %}
+<div class="card card-pad" style="margin-top:16px">
+  <h3 class="card-title">SSIDs</h3>
+  {% for ssid in detail.ssids %}<span class="pill">{{ ssid }}</span>{% endfor %}
+</div>
+{% endif %}
+
+{% if detail.vlans %}
+<div class="card card-pad" style="margin-top:16px">
+  <h3 class="card-title">VLANs</h3>
+  <div class="table-wrap">
+    <table class="data">
+      <thead><tr><th>VLAN ID</th><th>Name</th><th>Subnet</th></tr></thead>
+      <tbody>
+        {% for v in detail.vlans %}
+        <tr><td>{{ v.vlan_id }}</td><td>{{ v.name }}</td><td>{{ v.subnet or '-' }}</td></tr>
+        {% endfor %}
+      </tbody>
+    </table>
+  </div>
+</div>
+{% endif %}
+
+{% if detail.ports %}
+<div class="card card-pad" style="margin-top:16px">
+  <h3 class="card-title">Ports</h3>
+  <div class="table-wrap">
+    <table class="data">
+      <thead><tr><th>Port</th><th>Name</th><th>Enabled</th><th>Mode</th><th>PVID</th><th>Tagged VLANs</th></tr></thead>
+      <tbody>
+        {% for p in detail.ports %}
+        <tr>
+          <td>{{ p.number }}</td>
+          <td>{{ p.name or '-' }}</td>
+          <td>{{ 'Yes' if p.enabled else 'No' }}</td>
+          <td><span class="pill">{{ p.mode }}</span></td>
+          <td>{{ p.pvid }}</td>
+          <td>{{ p.tagged_vlans|join(', ') if p.tagged_vlans else '-' }}</td>
+        </tr>
+        {% endfor %}
+      </tbody>
+    </table>
+  </div>
+</div>
+{% endif %}
+{% endblock %}

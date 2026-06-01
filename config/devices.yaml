@@ -1,0 +1,79 @@
+# Declarative device inventory.
+# kind: gateway | switch | access_point
+devices:
+  - id: gateway-1
+    name: ER605
+    kind: gateway
+    mac: "AC:1F:6B:A0:00:01"
+    model: TP-Link ER605 (OpenWrt)
+    ip: 192.168.50.254
+    firmware: "1.2.0"
+    site_id: default
+
+  - id: switch-1
+    name: TL-SG2210P
+    kind: switch
+    mac: "B0:4E:26:00:00:10"
+    model: TP-Link JetStream TL-SG2210P
+    ip: 192.168.50.2
+    firmware: "1.0.5"
+    site_id: default
+    vlans:
+      - vlan_id: 1
+        name: Default
+        subnet: 192.168.50.0/24
+      - vlan_id: 10
+        name: Management
+        subnet: 192.168.10.0/24
+      - vlan_id: 20
+        name: Guest
+        subnet: 192.168.20.0/24
+    ports:
+      - number: 1
+        name: Uplink
+        mode: trunk
+        pvid: 1
+        tagged_vlans: [1, 10, 20]
+      - number: 2
+        name: AP
+        mode: trunk
+        pvid: 1
+        tagged_vlans: [1, 20]
+      - number: 3
+        name: Controller
+        mode: access
+        pvid: 10
+      - number: 4
+        name: Desktop
+        mode: access
+        pvid: 1
+      - number: 5
+        name: ""
+        mode: access
+        pvid: 1
+      - number: 6
+        name: ""
+        mode: access
+        pvid: 1
+      - number: 7
+        name: ""
+        enabled: false
+        mode: access
+        pvid: 1
+      - number: 8
+        name: ""
+        enabled: false
+        mode: access
+        pvid: 1
+
+  - id: ap-1
+    name: EAP245
+    kind: access_point
+    mac: "10:27:F5:00:00:20"
+    model: TP-Link EAP245 (OpenWrt)
+    ip: 192.168.50.3
+    firmware: "5.0.4"
+    site_id: default
+    ssids:
+      - HomeNet
+      - HomeNet-Guest

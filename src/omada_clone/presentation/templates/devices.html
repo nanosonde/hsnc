@@ -1,0 +1,35 @@
+{% extends "base.html" %}
+{% block title %}Devices · openwrt-manager-ui{% endblock %}
+{% block content %}
+<div class="card card-pad">
+  <h3 class="card-title">Devices</h3>
+  <div class="table-wrap">
+    <table class="data">
+      <thead>
+        <tr>
+          <th>Name</th><th>Type</th><th>Model</th><th>MAC</th>
+          <th>IP Address</th><th>Status</th><th>Firmware</th>
+          <th>Clients</th><th>Uptime</th>
+        </tr>
+      </thead>
+      <tbody>
+        {% for d in rows %}
+        <tr>
+          <td><a href="{{ url_for('devices.detail', device_id=d.id) }}">{{ d.name }}</a></td>
+          <td><span class="pill">{{ d.kind.replace('_',' ') }}</span></td>
+          <td>{{ d.model }}</td>
+          <td>{{ d.mac }}</td>
+          <td>{{ d.ip }}</td>
+          <td><span class="status {{ d.status }}">{{ d.status|upper }}</span></td>
+          <td>{{ d.firmware or '-' }}</td>
+          <td>{{ d.client_count }}</td>
+          <td>{{ d.uptime }}</td>
+        </tr>
+        {% else %}
+        <tr><td colspan="9" class="muted">No devices configured.</td></tr>
+        {% endfor %}
+      </tbody>
+    </table>
+  </div>
+</div>
+{% endblock %}
