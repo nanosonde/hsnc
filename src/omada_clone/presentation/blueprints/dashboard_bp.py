@@ -14,4 +14,7 @@ bp = Blueprint("dashboard", __name__)
 def index():
     container = current_app.config["CONTAINER"]
     summary = container.get_dashboard_summary.execute()
-    return render_template("dashboard.html", summary=summary, active="dashboard")
+    diff = container.get_config_diff.execute()
+    return render_template(
+        "dashboard.html", summary=summary, diff=diff, active="dashboard"
+    )

@@ -19,6 +19,12 @@
       <div><span class="muted">Uptime:</span> {{ detail.row.uptime }}</div>
     </div>
   </div>
+  {% if is_admin() %}
+  <div style="margin-top:14px">
+    <a class="btn btn-primary" href="{{ url_for('config.edit', device_id=detail.row.id) }}">Edit Configuration</a>
+    <a class="btn" href="{{ url_for('config.pending') }}">Pending Changes</a>
+  </div>
+  {% endif %}
 </div>
 
 {% if detail.ssids %}

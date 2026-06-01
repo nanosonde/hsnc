@@ -112,3 +112,31 @@ class ConfigArchive(ABC):
     @abstractmethod
     def import_files(self, files: dict[str, str]) -> None:
         """Replace configuration with the provided filename -> contents map."""
+
+
+class ConfigWriter(ABC):
+    """Persist declarative device configuration back to storage.
+
+    Implementations validate the device, take a timestamped backup of the
+    managed config files, then write atomically.
+    """
+
+    @abstractmethod
+    def save_device(self, device: Device) -> None:
+        """Create or update a single device in the inventory."""
+
+
+class AppliedConfigStore(ABC):
+    """Persists the last successfully applied configuration snapshot.
+
+    The desired configuration lives in YAML; this store records what was last
+    pushed to devices so a diff (pending changes) can be computed.
+    """
+
+    @abstractmethod
+    def load(self) -> list[Device]:
+        """Return the devices as of the last successful apply (may be empty)."""
+
+    @abstractmethod
+    def save(self, devices: list[Device]) -> None:
+        """Replace the applied snapshot with the given devices."""

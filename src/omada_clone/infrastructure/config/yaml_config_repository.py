@@ -8,6 +8,7 @@ Configuration is split across three files under the config directory:
 
 from __future__ import annotations
 
+from datetime import UTC, datetime
 from pathlib import Path
 
 import yaml
@@ -20,27 +21,36 @@ from ...domain.entities import (
     Vlan,
 )
 from ...domain.enums import DeviceKind, DeviceStatus, PortMode, Role
-from ...domain.interfaces import ConfigArchive, ConfigRepository
+from ...domain.interfaces import ConfigArchive, ConfigRepository, ConfigWriter
 from ...domain.value_objects import IpAddress, MacAddress
 from .schemas import (
     DeviceSchema,
     DevicesFileSchema,
+    PortSchema,
     SiteSchema,
     UserSchema,
     UsersFileSchema,
+    VlanSchema,
 )
 
 SITE_FILE = "site.yaml"
 USERS_FILE = "users.yaml"
 DEVICES_FILE = "devices.yaml"
 _MANAGED_FILES = (SITE_FILE, USERS_FILE, DEVICES_FILE)
+_BACKUP_DIRNAME = "config-backups"
 
 
-class YamlConfigRepository(ConfigRepository, ConfigArchive):
+class YamlConfigRepository(ConfigRepository, ConfigArchive, ConfigWriter):
     """Loads configuration from YAML and maps it to domain entities."""
 
-    def __init__(self, config_dir: str | Path) -> None:
+    def __init__(self, config_dir: str | Path, backup_dir: str | Path | None = None) -> None:
         self._dir = Path(config_dir)
+        # Pre-write backups land beside the config by default, or in data_dir.
+        self._backup_dir = Path(backup_dir) if backup_dir else self._dir / _BACKUP_DIRNAME
+
+    @property
+    def config_dir(self) -> Path:
+        return self._dir
 
     # -- ConfigRepository -------------------------------------------------
 
@@ -89,6 +99,27 @@ class YamlConfigRepository(ConfigRepository, ConfigArchive):
             self._validate(name, contents)
             (self._dir / name).write_text(contents, encoding="utf-8")
 
+    # -- ConfigWriter -----------------------------------------------------
+
+    def save_device(self, device: Device) -> None:
+        """Create or update a device in devices.yaml (validated + backed up)."""
+
+        schema = self._from_device(device)
+        devices = self.list_devices()
+        existing = {d.id: d for d in devices}
+        existing[device.id] = self._to_device(schema)  # normalise via schema
+
+        file_schema = DevicesFileSchema(
+            devices=[self._from_device(d) for d in existing.values()]
+        )
+        # Serialise with stable ordering and validate before touching disk.
+        payload = file_schema.model_dump(mode="python")
+        contents = yaml.safe_dump(payload, default_flow_style=False, sort_keys=False)
+        self._validate(DEVICES_FILE, contents)
+
+        self._backup_managed_files()
+        self._atomic_write(DEVICES_FILE, contents)
+
     # -- mapping helpers --------------------------------------------------
 
     @staticmethod
@@ -129,6 +160,35 @@ class YamlConfigRepository(ConfigRepository, ConfigArchive):
             ssids=list(schema.ssids),
         )
 
+    @staticmethod
+    def _from_device(device: Device) -> DeviceSchema:
+        return DeviceSchema(
+            id=device.id,
+            name=device.name,
+            kind=device.kind.value,
+            mac=str(device.mac),
+            model=device.model,
+            ip=str(device.ip) if device.ip else None,
+            firmware=device.firmware,
+            site_id=device.site_id,
+            ports=[
+                PortSchema(
+                    number=p.number,
+                    name=p.name,
+                    enabled=p.enabled,
+                    mode=p.mode.value,
+                    pvid=p.pvid,
+                    tagged_vlans=list(p.tagged_vlans),
+                )
+                for p in device.ports
+            ],
+            vlans=[
+                VlanSchema(vlan_id=v.vlan_id, name=v.name, subnet=v.subnet)
+                for v in device.vlans
+            ],
+            ssids=list(device.ssids),
+        )
+
     # -- I/O --------------------------------------------------------------
 
     def _read_yaml(self, name: str) -> dict | None:
@@ -137,6 +197,27 @@ class YamlConfigRepository(ConfigRepository, ConfigArchive):
             return None
         with path.open(encoding="utf-8") as handle:
             return yaml.safe_load(handle)
+
+    def _atomic_write(self, name: str, contents: str) -> None:
+        self._dir.mkdir(parents=True, exist_ok=True)
+        target = self._dir / name
+        tmp = target.with_suffix(target.suffix + ".tmp")
+        tmp.write_text(contents, encoding="utf-8")
+        tmp.replace(target)
+
+    def _backup_managed_files(self) -> None:
+        """Copy current managed config files into a timestamped backup dir."""
+
+        present = [name for name in _MANAGED_FILES if (self._dir / name).exists()]
+        if not present:
+            return
+        stamp = datetime.now(UTC).strftime("%Y%m%dT%H%M%S%fZ")
+        dest = self._backup_dir / stamp
+        dest.mkdir(parents=True, exist_ok=True)
+        for name in present:
+            (dest / name).write_text(
+                (self._dir / name).read_text(encoding="utf-8"), encoding="utf-8"
+            )
 
     @staticmethod
     def _validate(name: str, contents: str) -> None:

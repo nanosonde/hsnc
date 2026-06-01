@@ -16,7 +16,9 @@ from omada_clone.domain.entities import (
     User,
 )
 from omada_clone.domain.interfaces import (
+    AppliedConfigStore,
     ConfigRepository,
+    ConfigWriter,
     DeviceAdapter,
     DeviceAdapterFactory,
     RuntimeStore,
@@ -106,3 +108,26 @@ class FakeTopologyProvider(TopologyProvider):
             nodes.append(TopologyNode(device.id, device.name, "device"))
             links.append(TopologyLink("internet", device.id))
         return Topology(nodes=nodes, links=links)
+
+
+class FakeConfigWriter(ConfigWriter):
+    def __init__(self, repo: FakeConfigRepository) -> None:
+        self._repo = repo
+        self.saved: list[Device] = []
+
+    def save_device(self, device: Device) -> None:
+        self._repo._devices = [
+            device if d.id == device.id else d for d in self._repo._devices
+        ]
+        self.saved.append(device)
+
+
+class FakeAppliedConfigStore(AppliedConfigStore):
+    def __init__(self, devices: list[Device] | None = None) -> None:
+        self._devices = list(devices or [])
+
+    def load(self) -> list[Device]:
+        return list(self._devices)
+
+    def save(self, devices: list[Device]) -> None:
+        self._devices = list(devices)

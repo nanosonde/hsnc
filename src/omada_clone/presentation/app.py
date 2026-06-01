@@ -15,6 +15,7 @@ from .blueprints import (
     auth_bp,
     backup_bp,
     clients_bp,
+    config_bp,
     dashboard_bp,
     devices_bp,
     topology_bp,
@@ -45,6 +46,7 @@ def create_app(settings: Settings | None = None) -> Flask:
     app.register_blueprint(clients_bp.bp)
     app.register_blueprint(topology_bp.bp)
     app.register_blueprint(backup_bp.bp)
+    app.register_blueprint(config_bp.bp)
 
     _register_error_handlers(app)
     _start_scheduler(app, settings)

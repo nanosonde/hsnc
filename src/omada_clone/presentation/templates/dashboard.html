@@ -2,6 +2,16 @@
 {% block title %}Dashboard · openwrt-manager-ui{% endblock %}
 {% block content %}
 
+{% if diff and diff.has_changes %}
+<div class="card card-pad" style="margin-bottom:14px; border-left:4px solid var(--accent, #ff9800); display:flex; align-items:center; justify-content:space-between; gap:12px">
+  <div>
+    <strong>Pending configuration changes</strong>
+    <span class="muted">&mdash; {{ diff.change_count }} device{{ '' if diff.change_count == 1 else 's' }} differ from what was last applied.</span>
+  </div>
+  <a class="btn btn-primary" href="{{ url_for('config.pending') }}">Review &amp; Apply</a>
+</div>
+{% endif %}
+
 <div class="card summary-strip">
   {% for stat in summary.stats %}
   <div class="stat">

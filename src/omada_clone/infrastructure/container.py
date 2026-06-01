@@ -11,13 +11,22 @@ from dataclasses import dataclass
 from pathlib import Path
 
 from ..application.services import NetworkStateService
+from ..application.use_cases.apply_config import ApplyConfig
 from ..application.use_cases.authenticate_user import AuthenticateUser
 from ..application.use_cases.backup import ExportBackup, ImportBackup
+from ..application.use_cases.config_diff import GetConfigDiff
+from ..application.use_cases.edit_device_config import (
+    DeleteVlan,
+    SavePort,
+    SaveSsids,
+    SaveVlan,
+)
 from ..application.use_cases.get_dashboard_summary import GetDashboardSummary
 from ..application.use_cases.get_topology import GetTopology
 from ..application.use_cases.list_clients import ListClients
 from ..application.use_cases.list_devices import GetDeviceDetail, ListDevices
 from ..application.use_cases.poll_device_state import PollDeviceState
+from .config.applied_config_store import FileAppliedConfigStore
 from .config.yaml_config_repository import YamlConfigRepository
 from .devices.factory import DefaultDeviceAdapterFactory
 from .devices.topology_provider import SimpleTopologyProvider
@@ -38,6 +47,10 @@ class Settings:
     def db_path(self) -> Path:
         return self.data_dir / "runtime.db"
 
+    @property
+    def config_backup_dir(self) -> Path:
+        return self.data_dir / "config-backups"
+
 
 class Container:
     """Holds singletons and exposes constructed use cases."""
@@ -46,10 +59,13 @@ class Container:
         self.settings = settings
 
         # adapters / repositories (singletons)
-        self.config = YamlConfigRepository(settings.config_dir)
+        self.config = YamlConfigRepository(
+            settings.config_dir, backup_dir=settings.config_backup_dir
+        )
         self.runtime = SqliteRuntimeStore(settings.db_path)
         self.adapters = DefaultDeviceAdapterFactory(use_mock=settings.use_mock_devices)
         self.topology_provider = SimpleTopologyProvider()
+        self.applied_config = FileAppliedConfigStore(settings.data_dir)
 
         # application services
         self.network = NetworkStateService(self.config, self.adapters)
@@ -66,6 +82,14 @@ class Container:
         self.poll_device_state = PollDeviceState(self.network, self.runtime)
         self.export_backup = ExportBackup(self.config, self.runtime)
         self.import_backup = ImportBackup(self.config, self.runtime)
+
+        # configuration management use cases
+        self.save_vlan = SaveVlan(self.config, self.config)
+        self.delete_vlan = DeleteVlan(self.config, self.config)
+        self.save_port = SavePort(self.config, self.config)
+        self.save_ssids = SaveSsids(self.config, self.config)
+        self.get_config_diff = GetConfigDiff(self.config, self.applied_config)
+        self.apply_config = ApplyConfig(self.config, self.adapters, self.applied_config)
 
     def close(self) -> None:
         self.runtime.close()

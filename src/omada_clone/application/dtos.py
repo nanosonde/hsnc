@@ -139,3 +139,60 @@ class AuthenticatedUser:
     username: str
     display_name: str
     role: str
+
+
+@dataclass(frozen=True)
+class ChangeRow:
+    """A single field-level change between applied and desired config."""
+
+    field: str
+    old: str
+    new: str
+
+
+@dataclass(frozen=True)
+class DeviceDiff:
+    """Pending changes for one device."""
+
+    device_id: str
+    device_name: str
+    state: str  # "added" | "modified" | "removed"
+    changes: list[ChangeRow] = field(default_factory=list)
+
+
+@dataclass(frozen=True)
+class ConfigDiff:
+    """The full set of pending changes across all devices."""
+
+    devices: list[DeviceDiff] = field(default_factory=list)
+
+    @property
+    def has_changes(self) -> bool:
+        return bool(self.devices)
+
+    @property
+    def change_count(self) -> int:
+        return len(self.devices)
+
+
+@dataclass(frozen=True)
+class DeviceApplyResult:
+    device_id: str
+    device_name: str
+    ok: bool
+    message: str = ""
+
+
+@dataclass(frozen=True)
+class ApplyResult:
+    """Outcome of an apply operation."""
+
+    results: list[DeviceApplyResult] = field(default_factory=list)
+
+    @property
+    def ok(self) -> bool:
+        return all(r.ok for r in self.results)
+
+    @property
+    def failures(self) -> list[DeviceApplyResult]:
+        return [r for r in self.results if not r.ok]

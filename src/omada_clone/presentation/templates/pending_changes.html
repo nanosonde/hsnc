@@ -1,0 +1,46 @@
+{% extends "base.html" %}
+{% block title %}Pending Changes · openwrt-manager-ui{% endblock %}
+{% block content %}
+<a href="{{ url_for('devices.index') }}" class="muted">&larr; Devices</a>
+
+<div class="card card-pad" style="margin-top:10px">
+  <h3 class="card-title">Pending Changes
+    {% if diff.has_changes %}
+    <span class="pill" style="margin-left:8px">{{ diff.change_count }} change{{ '' if diff.change_count == 1 else 's' }}</span>
+    {% endif %}
+  </h3>
+  {% if diff.has_changes %}
+  <p class="muted">The desired configuration differs from what was last applied to the devices.</p>
+  {% if is_admin() %}
+  <form method="post" action="{{ url_for('config.apply') }}"
+        onsubmit="return confirm('Apply configuration to all devices?');">
+    <button class="btn btn-primary" type="submit">Apply Configuration</button>
+  </form>
+  {% endif %}
+  {% else %}
+  <p class="muted">All devices are up to date. Nothing to apply.</p>
+  {% endif %}
+</div>
+
+{% for dev in diff.devices %}
+<div class="card card-pad" style="margin-top:16px">
+  <h3 class="card-title">{{ dev.device_name }}
+    <span class="pill">{{ dev.state }}</span>
+  </h3>
+  <div class="table-wrap">
+    <table class="data">
+      <thead><tr><th>Field</th><th>Applied</th><th>Desired</th></tr></thead>
+      <tbody>
+        {% for c in dev.changes %}
+        <tr>
+          <td>{{ c.field }}</td>
+          <td class="muted">{{ c.old if c.old is not none else '-' }}</td>
+          <td>{{ c.new if c.new is not none else '-' }}</td>
+        </tr>
+        {% endfor %}
+      </tbody>
+    </table>
+  </div>
+</div>
+{% endfor %}
+{% endblock %}
