@@ -151,6 +151,18 @@ class ChangeRow:
 
 
 @dataclass(frozen=True)
+class CommandLine:
+    """A single rendered platform command within a command-level diff.
+
+    ``change`` is one of ``"context"`` (unchanged), ``"added"`` (sent to reach
+    the desired config) or ``"removed"`` (present only in the applied config).
+    """
+
+    text: str
+    change: str  # "context" | "added" | "removed"
+
+
+@dataclass(frozen=True)
 class DeviceDiff:
     """Pending changes for one device."""
 
@@ -158,6 +170,8 @@ class DeviceDiff:
     device_name: str
     state: str  # "added" | "modified" | "removed"
     changes: list[ChangeRow] = field(default_factory=list)
+    platform: str = ""
+    command_diff: list[CommandLine] = field(default_factory=list)
 
 
 @dataclass(frozen=True)

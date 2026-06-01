@@ -30,6 +30,7 @@ from ..application.use_cases.poll_device_state import PollDeviceState
 from ..application.use_cases.revert_config import RevertPendingChanges
 from .config.applied_config_store import FileAppliedConfigStore
 from .config.yaml_config_repository import YamlConfigRepository
+from .devices.config_renderers import DefaultConfigRendererFactory
 from .devices.factory import DefaultDeviceAdapterFactory
 from .devices.topology_provider import SimpleTopologyProvider
 from .persistence.sqlite_runtime_store import SqliteRuntimeStore
@@ -66,6 +67,7 @@ class Container:
         )
         self.runtime = SqliteRuntimeStore(settings.db_path)
         self.adapters = DefaultDeviceAdapterFactory(use_mock=settings.use_mock_devices)
+        self.renderers = DefaultConfigRendererFactory()
         self.topology_provider = SimpleTopologyProvider()
         self.applied_config = FileAppliedConfigStore(settings.data_dir)
 
@@ -90,7 +92,9 @@ class Container:
         self.delete_vlan = DeleteVlan(self.config, self.config)
         self.save_port = SavePort(self.config, self.config)
         self.save_ssids = SaveSsids(self.config, self.config)
-        self.get_config_diff = GetConfigDiff(self.config, self.applied_config)
+        self.get_config_diff = GetConfigDiff(
+            self.config, self.applied_config, self.renderers
+        )
         self.plan_apply = PlanApply(self.config, self.applied_config, self.adapters)
         self.apply_config = ApplyConfig(
             self.config, self.adapters, self.applied_config, self.runtime

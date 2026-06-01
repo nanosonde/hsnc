@@ -70,6 +70,31 @@ class DeviceAdapterFactory(ABC):
     def for_device(self, device: Device) -> DeviceAdapter: ...
 
 
+class DeviceConfigRenderer(ABC):
+    """Renders a device's declarative config into platform-native commands.
+
+    Implementations translate a :class:`Device` into the exact command sequence
+    that would provision it on its platform (e.g. OpenWrt ``uci`` batches or the
+    TP-Link JetStream CLI over SSH). This is what powers a command-level diff.
+    """
+
+    @property
+    @abstractmethod
+    def platform(self) -> str:
+        """Human-readable platform label, e.g. ``"OpenWrt (UCI over SSH)"``."""
+
+    @abstractmethod
+    def render(self, device: Device) -> list[str]:
+        """Return the ordered commands that realise ``device``'s configuration."""
+
+
+class DeviceConfigRendererFactory(ABC):
+    """Selects the appropriate :class:`DeviceConfigRenderer` for a device."""
+
+    @abstractmethod
+    def for_device(self, device: Device) -> DeviceConfigRenderer: ...
+
+
 class RuntimeStore(ABC):
     """Persistence for time-series runtime data (SQLite-backed)."""
 

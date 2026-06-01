@@ -71,6 +71,23 @@
   {% else %}
   <p class="muted">New device — will be provisioned in full.</p>
   {% endif %}
+
+  {% if dev.command_diff %}
+  <div style="margin-top:14px">
+    <div class="muted" style="margin-bottom:6px">
+      Commands &middot; <strong>{{ dev.platform }}</strong>
+      <span style="margin-left:8px">
+        <span style="color:#1a7f37">+ added</span> /
+        <span style="color:#cf222e">- removed</span>
+      </span>
+    </div>
+    <pre class="cmd-diff"><code>{% for line in dev.command_diff -%}
+{% if line.change == 'added' %}<span class="cmd-add">+ {{ line.text }}</span>
+{% elif line.change == 'removed' %}<span class="cmd-del">- {{ line.text }}</span>
+{% else %}<span class="cmd-ctx">  {{ line.text }}</span>
+{% endif %}{%- endfor %}</code></pre>
+  </div>
+  {% endif %}
 </div>
 {% endfor %}
 {% endblock %}
