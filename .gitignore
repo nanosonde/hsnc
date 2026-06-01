@@ -24,6 +24,8 @@ coverage.xml
 /data/*.db
 /data/*.db-*
 /data/backups/
+/data/applied_config.json
+/data/config-backups/
 
 # Editor / OS
 .vscode/

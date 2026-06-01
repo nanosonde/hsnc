@@ -12,7 +12,7 @@ from __future__ import annotations
 from collections.abc import Iterable
 from datetime import UTC, datetime
 
-from ...domain.entities import ApplyEvent, ApplyOutcome
+from ...domain.entities import ApplyEvent, ApplyOutcome, FieldChange
 from ...domain.interfaces import (
     AppliedConfigStore,
     ApplyHistoryStore,
@@ -88,10 +88,19 @@ class ApplyConfig:
         username: str = "",
     ) -> ApplyResult:
         selected = set(device_ids) if device_ids is not None else None
+
+        # Only devices that actually differ from the applied snapshot are pushed
+        # and recorded; unchanged devices are skipped so history shows real work.
+        diff = GetConfigDiff(self._config, self._applied).execute()
+        changes_by_id = {
+            d.device_id: d.changes
+            for d in diff.devices
+            if d.state in ("added", "modified")
+        }
         devices = [
             d
             for d in self._config.list_devices()
-            if selected is None or d.id in selected
+            if d.id in changes_by_id and (selected is None or d.id in selected)
         ]
         results: list[DeviceApplyResult] = []
 
@@ -134,7 +143,16 @@ class ApplyConfig:
                     username=username,
                     ok=result.ok,
                     outcomes=[
-                        ApplyOutcome(r.device_id, r.device_name, r.ok, r.message)
+                        ApplyOutcome(
+                            r.device_id,
+                            r.device_name,
+                            r.ok,
+                            r.message,
+                            changes=[
+                                FieldChange(c.field, c.old, c.new)
+                                for c in changes_by_id.get(r.device_id, [])
+                            ],
+                        )
                         for r in results
                     ],
                 )

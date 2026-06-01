@@ -76,6 +76,35 @@ def test_apply_with_mock_clears_diff(config, adapters):
     assert history.events[0].ok
 
 
+def test_apply_skips_unchanged_devices(config, adapters):
+    applied = FakeAppliedConfigStore(devices=copy.deepcopy(config.list_devices()))
+    history = FakeApplyHistoryStore()
+    apply = ApplyConfig(config, adapters, applied, history)
+
+    result = apply.execute(username="admin")
+    # nothing differs -> nothing applied, nothing recorded
+    assert result.ok
+    assert result.results == []
+    assert history.events == []
+
+
+def test_apply_records_field_changes_for_history(config, adapters, devices):
+    applied = FakeAppliedConfigStore(devices=copy.deepcopy(devices))
+    history = FakeApplyHistoryStore()
+    # one real change on switch-1
+    switch = config.get_device("switch-1")
+    switch.vlans.append(Vlan(vlan_id=10, name="IoT", subnet="192.168.10.0/24"))
+
+    ApplyConfig(config, adapters, applied, history).execute(username="admin")
+
+    assert len(history.events) == 1
+    outcomes = history.events[0].outcomes
+    # only the changed device is recorded
+    assert [o.device_id for o in outcomes] == ["switch-1"]
+    # and the specific field change is captured
+    assert any(c.field == "VLANs" for c in outcomes[0].changes)
+
+
 def test_apply_surfaces_not_implemented_per_device(config):
     applied = FakeAppliedConfigStore()
     apply = ApplyConfig(config, _RaisingFactory(), applied, FakeApplyHistoryStore())

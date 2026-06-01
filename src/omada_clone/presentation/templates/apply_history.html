@@ -21,7 +21,7 @@
   </h3>
   <div class="table-wrap">
     <table class="data">
-      <thead><tr><th>Device</th><th>Result</th><th>Message</th></tr></thead>
+      <thead><tr><th>Device</th><th>Result</th><th>Changes</th></tr></thead>
       <tbody>
         {% for o in event.outcomes %}
         <tr>
@@ -31,7 +31,22 @@
               {{ 'OK' if o.ok else 'FAILED' }}
             </span>
           </td>
-          <td class="muted">{{ o.message or '-' }}</td>
+          <td>
+            {% if o.message %}<div class="muted">{{ o.message }}</div>{% endif %}
+            {% if o.changes %}
+            <ul style="margin:0; padding-left:18px">
+              {% for c in o.changes %}
+              <li>
+                <strong>{{ c.field }}:</strong>
+                <span class="muted">{{ c.old if c.old else '∅' }}</span>
+                &rarr; {{ c.new if c.new else '∅' }}
+              </li>
+              {% endfor %}
+            </ul>
+            {% elif not o.message %}
+            <span class="muted">-</span>
+            {% endif %}
+          </td>
         </tr>
         {% endfor %}
       </tbody>

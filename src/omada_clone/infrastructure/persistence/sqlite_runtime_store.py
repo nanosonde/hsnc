@@ -20,6 +20,7 @@ from ...domain.entities import (
     AssociationFailure,
     Client,
     Device,
+    FieldChange,
 )
 from ...domain.interfaces import ApplyHistoryStore, RuntimeStore
 
@@ -208,6 +209,10 @@ class SqliteRuntimeStore(RuntimeStore, ApplyHistoryStore):
                     "device_name": o.device_name,
                     "ok": o.ok,
                     "message": o.message,
+                    "changes": [
+                        {"field": c.field, "old": c.old, "new": c.new}
+                        for c in o.changes
+                    ],
                 }
                 for o in event.outcomes
             ]
@@ -240,6 +245,10 @@ class SqliteRuntimeStore(RuntimeStore, ApplyHistoryStore):
                     device_name=o["device_name"],
                     ok=bool(o["ok"]),
                     message=o.get("message", ""),
+                    changes=[
+                        FieldChange(c["field"], c["old"], c["new"])
+                        for c in o.get("changes", [])
+                    ],
                 )
                 for o in json.loads(row["details_json"])
             ]

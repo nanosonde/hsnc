@@ -145,6 +145,15 @@ class AssociationFailure:
 
 
 @dataclass(frozen=True)
+class FieldChange:
+    """A single field-level change applied to a device (for audit/history)."""
+
+    field: str
+    old: str
+    new: str
+
+
+@dataclass(frozen=True)
 class ApplyOutcome:
     """The result of pushing configuration to a single device."""
 
@@ -152,6 +161,7 @@ class ApplyOutcome:
     device_name: str
     ok: bool
     message: str = ""
+    changes: list[FieldChange] = field(default_factory=list)
 
 
 @dataclass
