@@ -7,21 +7,33 @@ migrations applied automatically at startup.
 
 from __future__ import annotations
 
+import json
 import sqlite3
 import threading
 from collections.abc import Iterable
 from datetime import datetime
 from pathlib import Path
 
-from ...domain.entities import AssociationFailure, Client, Device
-from ...domain.interfaces import RuntimeStore
+from ...domain.entities import (
+    ApplyEvent,
+    ApplyOutcome,
+    AssociationFailure,
+    Client,
+    Device,
+)
+from ...domain.interfaces import ApplyHistoryStore, RuntimeStore
 
-SCHEMA_VERSION = 1
+SCHEMA_VERSION = 2
 
-_RUNTIME_TABLES = ("device_status", "client_session", "association_failure")
+_RUNTIME_TABLES = (
+    "device_status",
+    "client_session",
+    "association_failure",
+    "apply_event",
+)
 
 
-class SqliteRuntimeStore(RuntimeStore):
+class SqliteRuntimeStore(RuntimeStore, ApplyHistoryStore):
     """Thread-safe SQLite runtime store with automatic migrations."""
 
     def __init__(self, db_path: str | Path) -> None:
@@ -50,7 +62,8 @@ class SqliteRuntimeStore(RuntimeStore):
 
             if current < 1:
                 self._apply_v1(cur)
-            # future: if current < 2: self._apply_v2(cur)
+            if current < 2:
+                self._apply_v2(cur)
 
             cur.execute("DELETE FROM schema_version")
             cur.execute("INSERT INTO schema_version (version) VALUES (?)", (SCHEMA_VERSION,))
@@ -98,6 +111,22 @@ class SqliteRuntimeStore(RuntimeStore):
             );
             CREATE INDEX IF NOT EXISTS idx_assoc_failure_time
                 ON association_failure (recorded_at);
+            """
+        )
+
+    @staticmethod
+    def _apply_v2(cur: sqlite3.Cursor) -> None:
+        cur.executescript(
+            """
+            CREATE TABLE IF NOT EXISTS apply_event (
+                id            INTEGER PRIMARY KEY AUTOINCREMENT,
+                applied_at    TEXT NOT NULL,
+                username      TEXT NOT NULL DEFAULT '',
+                ok            INTEGER NOT NULL DEFAULT 0,
+                details_json  TEXT NOT NULL DEFAULT '[]'
+            );
+            CREATE INDEX IF NOT EXISTS idx_apply_event_time
+                ON apply_event (applied_at);
             """
         )
 
@@ -168,6 +197,62 @@ class SqliteRuntimeStore(RuntimeStore):
                 (row["recorded_at"],),
             ).fetchall()
         return [AssociationFailure(r["category"], r["count"]) for r in rows]
+
+    # -- ApplyHistoryStore ------------------------------------------------
+
+    def record_apply_event(self, event: ApplyEvent) -> None:
+        details = json.dumps(
+            [
+                {
+                    "device_id": o.device_id,
+                    "device_name": o.device_name,
+                    "ok": o.ok,
+                    "message": o.message,
+                }
+                for o in event.outcomes
+            ]
+        )
+        with self._lock:
+            self._conn.execute(
+                "INSERT INTO apply_event (applied_at, username, ok, details_json) "
+                "VALUES (?, ?, ?, ?)",
+                (
+                    event.applied_at.isoformat(),
+                    event.username,
+                    1 if event.ok else 0,
+                    details,
+                ),
+            )
+            self._conn.commit()
+
+    def list_apply_events(self, limit: int = 50) -> list[ApplyEvent]:
+        with self._lock:
+            rows = self._conn.execute(
+                "SELECT id, applied_at, username, ok, details_json FROM apply_event "
+                "ORDER BY id DESC LIMIT ?",
+                (limit,),
+            ).fetchall()
+        events: list[ApplyEvent] = []
+        for row in rows:
+            outcomes = [
+                ApplyOutcome(
+                    device_id=o["device_id"],
+                    device_name=o["device_name"],
+                    ok=bool(o["ok"]),
+                    message=o.get("message", ""),
+                )
+                for o in json.loads(row["details_json"])
+            ]
+            events.append(
+                ApplyEvent(
+                    id=row["id"],
+                    applied_at=datetime.fromisoformat(row["applied_at"]),
+                    username=row["username"],
+                    ok=bool(row["ok"]),
+                    outcomes=outcomes,
+                )
+            )
+        return events
 
     def export_rows(self) -> dict[str, list[dict]]:
         with self._lock:

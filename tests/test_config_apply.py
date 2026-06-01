@@ -4,7 +4,7 @@ from __future__ import annotations
 
 import copy
 
-from omada_clone.application.use_cases.apply_config import ApplyConfig
+from omada_clone.application.use_cases.apply_config import ApplyConfig, PlanApply
 from omada_clone.application.use_cases.config_diff import GetConfigDiff
 from omada_clone.domain.entities import Device, Vlan
 from omada_clone.domain.enums import DeviceKind, DeviceStatus
@@ -13,6 +13,7 @@ from omada_clone.domain.value_objects import MacAddress
 
 from .fakes import (
     FakeAppliedConfigStore,
+    FakeApplyHistoryStore,
     FakeConfigRepository,
     FakeDeviceAdapter,
 )
@@ -60,19 +61,24 @@ def test_diff_detects_modified_field(config, devices):
 
 def test_apply_with_mock_clears_diff(config, adapters):
     applied = FakeAppliedConfigStore()
-    apply = ApplyConfig(config, adapters, applied)
+    history = FakeApplyHistoryStore()
+    apply = ApplyConfig(config, adapters, applied, history)
 
-    result = apply.execute()
+    result = apply.execute(username="admin")
     assert result.ok
     assert len(result.results) == len(config.list_devices())
 
     diff = GetConfigDiff(config, applied).execute()
     assert not diff.has_changes
+    # a history event is recorded with the acting user
+    assert len(history.events) == 1
+    assert history.events[0].username == "admin"
+    assert history.events[0].ok
 
 
 def test_apply_surfaces_not_implemented_per_device(config):
     applied = FakeAppliedConfigStore()
-    apply = ApplyConfig(config, _RaisingFactory(), applied)
+    apply = ApplyConfig(config, _RaisingFactory(), applied, FakeApplyHistoryStore())
 
     result = apply.execute()
     assert not result.ok
@@ -111,9 +117,67 @@ def test_apply_partial_success_records_only_ok_devices(devices):
             return FakeDeviceAdapter({})
 
     applied = FakeAppliedConfigStore()
-    result = ApplyConfig(config, _MixedFactory(), applied).execute()
+    result = ApplyConfig(config, _MixedFactory(), applied, FakeApplyHistoryStore()).execute()
 
     assert not result.ok
     assert {r.device_id for r in result.results if r.ok} == {"ok-1"}
     # only the successful device should be in the snapshot
     assert {d.id for d in applied.load()} == {"ok-1"}
+
+
+def test_plan_reports_create_actions_when_nothing_applied(config, adapters):
+    plan = PlanApply(config, FakeAppliedConfigStore(), adapters).execute()
+    assert plan.has_actionable
+    assert {i.action for i in plan.items} == {"create"}
+    assert all(i.supported for i in plan.items)
+    # dry-run must not record history or change the snapshot
+    applied = FakeAppliedConfigStore()
+    PlanApply(config, applied, adapters).execute()
+    assert applied.load() == []
+
+
+def test_plan_reports_noop_after_apply(config, adapters):
+    applied = FakeAppliedConfigStore()
+    ApplyConfig(config, adapters, applied, FakeApplyHistoryStore()).execute()
+    plan = PlanApply(config, applied, adapters).execute()
+    assert not plan.has_actionable
+    assert {i.action for i in plan.items} == {"noop"}
+
+
+def test_plan_marks_unsupported_devices(config):
+    class _Unsupported(DeviceAdapter):
+        def supports(self, device: Device) -> bool:
+            return False
+
+        def fetch_status(self, device: Device) -> Device:
+            return device
+
+        def fetch_clients(self, device):
+            return []
+
+        def push_config(self, device: Device) -> None:
+            return None
+
+    class _UnsupportedFactory(DeviceAdapterFactory):
+        def for_device(self, device: Device) -> DeviceAdapter:
+            return _Unsupported()
+
+    plan = PlanApply(config, FakeAppliedConfigStore(), _UnsupportedFactory()).execute()
+    assert not plan.has_actionable
+    assert {i.action for i in plan.items} == {"unsupported"}
+
+
+def test_per_device_apply_only_touches_that_device(config, adapters):
+    applied = FakeAppliedConfigStore()
+    history = FakeApplyHistoryStore()
+    apply = ApplyConfig(config, adapters, applied, history)
+
+    target = config.list_devices()[0]
+    result = apply.execute(device_ids=[target.id], username="admin")
+    assert result.ok
+    assert len(result.results) == 1
+    assert {d.id for d in applied.load()} == {target.id}
+    # the others remain pending
+    pending = {d.device_id for d in GetConfigDiff(config, applied).execute().devices}
+    assert target.id not in pending
+    assert len(history.events) == 1

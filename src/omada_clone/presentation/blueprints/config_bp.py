@@ -22,7 +22,7 @@ from ...application.use_cases.edit_device_config import (
     ConfigEditError,
     DeviceNotFoundError,
 )
-from ..auth import login_required, role_required
+from ..auth import current_user, login_required, role_required
 
 bp = Blueprint("config", __name__)
 
@@ -124,17 +124,61 @@ def save_ssids(device_id: str):
 def pending():
     container = _container()
     diff = container.get_config_diff.execute()
-    return render_template("pending_changes.html", diff=diff, active="devices")
+    plan = container.plan_apply.execute()
+    return render_template(
+        "pending_changes.html", diff=diff, plan=plan, active="devices"
+    )
+
+
+def _flash_apply_result(result) -> None:
+    if result.ok:
+        applied = len(result.results)
+        if applied:
+            flash(f"Configuration applied to {applied} device(s).", "success")
+        else:
+            flash("Nothing to apply.", "success")
+    else:
+        for failure in result.failures:
+            flash(f"{failure.device_name}: {failure.message}", "error")
 
 
 @bp.route("/config/apply", methods=["POST"])
 @role_required("admin")
 def apply():
     container = _container()
-    result = container.apply_config.execute()
-    if result.ok:
-        flash("Configuration applied to all devices.", "success")
-    else:
-        for failure in result.failures:
-            flash(f"{failure.device_name}: {failure.message}", "error")
+    user = current_user() or {}
+    result = container.apply_config.execute(username=user.get("username", ""))
+    _flash_apply_result(result)
     return redirect(url_for("config.pending"))
+
+
+@bp.route("/config/apply/<device_id>", methods=["POST"])
+@role_required("admin")
+def apply_device(device_id: str):
+    container = _container()
+    user = current_user() or {}
+    result = container.apply_config.execute(
+        device_ids=[device_id], username=user.get("username", "")
+    )
+    _flash_apply_result(result)
+    return redirect(url_for("config.pending"))
+
+
+@bp.route("/config/revert", methods=["POST"])
+@role_required("admin")
+def revert():
+    container = _container()
+    reverted = container.revert_changes.execute()
+    if reverted:
+        flash(f"Reverted {reverted} device(s) to the last applied configuration.", "success")
+    else:
+        flash("Nothing to revert.", "success")
+    return redirect(url_for("config.pending"))
+
+
+@bp.route("/config/history")
+@login_required
+def history():
+    container = _container()
+    events = container.list_apply_history.execute()
+    return render_template("apply_history.html", events=events, active="devices")

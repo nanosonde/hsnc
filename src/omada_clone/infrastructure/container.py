@@ -11,7 +11,8 @@ from dataclasses import dataclass
 from pathlib import Path
 
 from ..application.services import NetworkStateService
-from ..application.use_cases.apply_config import ApplyConfig
+from ..application.use_cases.apply_config import ApplyConfig, PlanApply
+from ..application.use_cases.apply_history import ListApplyHistory
 from ..application.use_cases.authenticate_user import AuthenticateUser
 from ..application.use_cases.backup import ExportBackup, ImportBackup
 from ..application.use_cases.config_diff import GetConfigDiff
@@ -26,6 +27,7 @@ from ..application.use_cases.get_topology import GetTopology
 from ..application.use_cases.list_clients import ListClients
 from ..application.use_cases.list_devices import GetDeviceDetail, ListDevices
 from ..application.use_cases.poll_device_state import PollDeviceState
+from ..application.use_cases.revert_config import RevertPendingChanges
 from .config.applied_config_store import FileAppliedConfigStore
 from .config.yaml_config_repository import YamlConfigRepository
 from .devices.factory import DefaultDeviceAdapterFactory
@@ -89,7 +91,14 @@ class Container:
         self.save_port = SavePort(self.config, self.config)
         self.save_ssids = SaveSsids(self.config, self.config)
         self.get_config_diff = GetConfigDiff(self.config, self.applied_config)
-        self.apply_config = ApplyConfig(self.config, self.adapters, self.applied_config)
+        self.plan_apply = PlanApply(self.config, self.applied_config, self.adapters)
+        self.apply_config = ApplyConfig(
+            self.config, self.adapters, self.applied_config, self.runtime
+        )
+        self.list_apply_history = ListApplyHistory(self.runtime)
+        self.revert_changes = RevertPendingChanges(
+            self.config, self.applied_config, self.config
+        )
 
     def close(self) -> None:
         self.runtime.close()

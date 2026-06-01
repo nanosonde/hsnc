@@ -113,6 +113,42 @@ def test_sqlite_import_rows_replaces(tmp_path):
     store.close()
 
 
+def test_sqlite_apply_event_persists_and_roundtrips(tmp_path):
+    from datetime import datetime
+
+    from omada_clone.domain.entities import ApplyEvent, ApplyOutcome
+
+    store = SqliteRuntimeStore(tmp_path / "rt.db")
+    event = ApplyEvent(
+        applied_at=datetime(2026, 6, 1, 12, 0, tzinfo=UTC),
+        username="admin",
+        ok=False,
+        outcomes=[
+            ApplyOutcome("d1", "Switch", ok=True),
+            ApplyOutcome("d2", "Gateway", ok=False, message="not implemented"),
+        ],
+    )
+    store.record_apply_event(event)
+
+    listed = store.list_apply_events()
+    assert len(listed) == 1
+    assert listed[0].username == "admin"
+    assert listed[0].ok is False
+    assert len(listed[0].outcomes) == 2
+    assert listed[0].outcomes[1].message == "not implemented"
+
+    # apply_event is included in backups (export/import roundtrip)
+    exported = store.export_rows()
+    assert len(exported["apply_event"]) == 1
+    store.import_rows({})
+    assert store.list_apply_events() == []
+    store.import_rows(exported)
+    restored = store.list_apply_events()
+    assert len(restored) == 1
+    assert restored[0].outcomes[1].message == "not implemented"
+    store.close()
+
+
 def test_backup_roundtrip(config_dir, tmp_path):
     repo = YamlConfigRepository(config_dir)
     store = SqliteRuntimeStore(tmp_path / "rt.db")

@@ -196,3 +196,25 @@ class ApplyResult:
     @property
     def failures(self) -> list[DeviceApplyResult]:
         return [r for r in self.results if not r.ok]
+
+
+@dataclass(frozen=True)
+class ApplyPlanItem:
+    """The planned action for a single device in a dry-run."""
+
+    device_id: str
+    device_name: str
+    action: str  # "create" | "update" | "noop" | "unsupported"
+    supported: bool
+    change_count: int
+
+
+@dataclass(frozen=True)
+class ApplyPlan:
+    """A dry-run preview of what an apply would do, per device."""
+
+    items: list[ApplyPlanItem] = field(default_factory=list)
+
+    @property
+    def has_actionable(self) -> bool:
+        return any(i.action in ("create", "update") and i.supported for i in self.items)

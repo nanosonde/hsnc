@@ -6,6 +6,7 @@ Entities are plain dataclasses free of any framework or persistence concern.
 from __future__ import annotations
 
 from dataclasses import dataclass, field
+from datetime import datetime
 
 from .enums import (
     ConnectionType,
@@ -141,3 +142,24 @@ class AssociationFailure:
 
     category: str
     count: int = 0
+
+
+@dataclass(frozen=True)
+class ApplyOutcome:
+    """The result of pushing configuration to a single device."""
+
+    device_id: str
+    device_name: str
+    ok: bool
+    message: str = ""
+
+
+@dataclass
+class ApplyEvent:
+    """A recorded configuration-apply run (for history / audit)."""
+
+    applied_at: datetime
+    username: str
+    ok: bool
+    outcomes: list[ApplyOutcome] = field(default_factory=list)
+    id: int | None = None

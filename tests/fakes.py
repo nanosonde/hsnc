@@ -6,6 +6,7 @@ from collections.abc import Iterable
 from datetime import datetime
 
 from omada_clone.domain.entities import (
+    ApplyEvent,
     AssociationFailure,
     Client,
     Device,
@@ -17,6 +18,7 @@ from omada_clone.domain.entities import (
 )
 from omada_clone.domain.interfaces import (
     AppliedConfigStore,
+    ApplyHistoryStore,
     ConfigRepository,
     ConfigWriter,
     DeviceAdapter,
@@ -131,3 +133,14 @@ class FakeAppliedConfigStore(AppliedConfigStore):
 
     def save(self, devices: list[Device]) -> None:
         self._devices = list(devices)
+
+
+class FakeApplyHistoryStore(ApplyHistoryStore):
+    def __init__(self) -> None:
+        self.events: list[ApplyEvent] = []
+
+    def record_apply_event(self, event: ApplyEvent) -> None:
+        self.events.append(event)
+
+    def list_apply_events(self, limit: int = 50) -> list[ApplyEvent]:
+        return list(reversed(self.events))[:limit]

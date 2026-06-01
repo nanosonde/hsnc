@@ -3,6 +3,9 @@
 {% block content %}
 <a href="{{ url_for('devices.index') }}" class="muted">&larr; Devices</a>
 
+{% set plan_by_id = {} %}
+{% for item in plan.items %}{% set _ = plan_by_id.update({item.device_id: item}) %}{% endfor %}
+
 <div class="card card-pad" style="margin-top:10px">
   <h3 class="card-title">Pending Changes
     {% if diff.has_changes %}
@@ -11,22 +14,46 @@
   </h3>
   {% if diff.has_changes %}
   <p class="muted">The desired configuration differs from what was last applied to the devices.</p>
-  {% if is_admin() %}
-  <form method="post" action="{{ url_for('config.apply') }}"
-        onsubmit="return confirm('Apply configuration to all devices?');">
-    <button class="btn btn-primary" type="submit">Apply Configuration</button>
-  </form>
-  {% endif %}
+  <div style="display:flex; gap:8px; align-items:center; flex-wrap:wrap">
+    {% if is_admin() %}
+    <form method="post" action="{{ url_for('config.apply') }}"
+          onsubmit="return confirm('Apply configuration to all devices?');">
+      <button class="btn btn-primary" type="submit"
+              {% if not plan.has_actionable %}disabled title="No applicable devices"{% endif %}>
+        Apply All
+      </button>
+    </form>
+    <form method="post" action="{{ url_for('config.revert') }}"
+          onsubmit="return confirm('Discard all pending changes and restore the last applied configuration?');">
+      <button class="btn" type="submit">Revert Changes</button>
+    </form>
+    {% endif %}
+    <a class="btn" href="{{ url_for('config.history') }}">History</a>
+  </div>
   {% else %}
   <p class="muted">All devices are up to date. Nothing to apply.</p>
+  <a class="btn" href="{{ url_for('config.history') }}">History</a>
   {% endif %}
 </div>
 
 {% for dev in diff.devices %}
+{% set item = plan_by_id.get(dev.device_id) %}
 <div class="card card-pad" style="margin-top:16px">
   <h3 class="card-title">{{ dev.device_name }}
     <span class="pill">{{ dev.state }}</span>
+    {% if item %}<span class="pill">{{ item.action }}</span>{% endif %}
+    {% if item and not item.supported %}
+    <span class="muted" style="margin-left:8px">no driver — apply will report unsupported</span>
+    {% endif %}
+    {% if is_admin() %}
+    <form method="post" action="{{ url_for('config.apply_device', device_id=dev.device_id) }}"
+          style="display:inline; float:right"
+          onsubmit="return confirm('Apply configuration to {{ dev.device_name }}?');">
+      <button class="btn btn-primary" type="submit">Apply</button>
+    </form>
+    {% endif %}
   </h3>
+  {% if dev.changes %}
   <div class="table-wrap">
     <table class="data">
       <thead><tr><th>Field</th><th>Applied</th><th>Desired</th></tr></thead>
@@ -41,6 +68,9 @@
       </tbody>
     </table>
   </div>
+  {% else %}
+  <p class="muted">New device — will be provisioned in full.</p>
+  {% endif %}
 </div>
 {% endfor %}
 {% endblock %}

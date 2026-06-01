@@ -11,6 +11,7 @@ from collections.abc import Iterable
 from datetime import datetime
 
 from .entities import (
+    ApplyEvent,
     AssociationFailure,
     Client,
     Device,
@@ -140,3 +141,15 @@ class AppliedConfigStore(ABC):
     @abstractmethod
     def save(self, devices: list[Device]) -> None:
         """Replace the applied snapshot with the given devices."""
+
+
+class ApplyHistoryStore(ABC):
+    """Persists a log of configuration-apply runs for history / audit."""
+
+    @abstractmethod
+    def record_apply_event(self, event: ApplyEvent) -> None:
+        """Append a single apply run to the history."""
+
+    @abstractmethod
+    def list_apply_events(self, limit: int = 50) -> list[ApplyEvent]:
+        """Return the most recent apply runs, newest first."""
