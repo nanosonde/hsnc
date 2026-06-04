@@ -8,14 +8,14 @@ from pathlib import Path
 import pytest
 import yaml
 
-from omada_clone.application.use_cases.edit_device_config import (
+from omui_clone.application.use_cases.edit_device_config import (
     ConfigEditError,
     DeleteVlan,
     SavePort,
     SaveSsids,
     SaveVlan,
 )
-from omada_clone.infrastructure.config.yaml_config_repository import (
+from omui_clone.infrastructure.config.yaml_config_repository import (
     YamlConfigRepository,
 )
 

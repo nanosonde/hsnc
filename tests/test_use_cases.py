@@ -4,16 +4,16 @@ from __future__ import annotations
 
 from datetime import UTC, datetime
 
-from omada_clone.application.services import NetworkStateService
-from omada_clone.application.use_cases.authenticate_user import AuthenticateUser
-from omada_clone.application.use_cases.get_dashboard_summary import GetDashboardSummary
-from omada_clone.application.use_cases.get_topology import GetTopology
-from omada_clone.application.use_cases.list_clients import ListClients
-from omada_clone.application.use_cases.list_devices import (
+from omui_clone.application.services import NetworkStateService
+from omui_clone.application.use_cases.authenticate_user import AuthenticateUser
+from omui_clone.application.use_cases.get_dashboard_summary import GetDashboardSummary
+from omui_clone.application.use_cases.get_topology import GetTopology
+from omui_clone.application.use_cases.list_clients import ListClients
+from omui_clone.application.use_cases.list_devices import (
     GetDeviceDetail,
     ListDevices,
 )
-from omada_clone.application.use_cases.poll_device_state import PollDeviceState
+from omui_clone.application.use_cases.poll_device_state import PollDeviceState
 
 from .fakes import FakeRuntimeStore, FakeTopologyProvider
 

@@ -11,7 +11,7 @@
 {% set user = current_user() %}
 {% if user %}
 <div class="app" id="app-shell">
-  <script>try{if(localStorage.getItem("omada.nav.collapsed")==="1")document.getElementById("app-shell").classList.add("nav-collapsed");}catch(e){}</script>
+  <script>try{if(localStorage.getItem("omui.nav.collapsed")==="1")document.getElementById("app-shell").classList.add("nav-collapsed");}catch(e){}</script>
   <header class="topbar">
     <button type="button" class="nav-toggle" id="nav-toggle" title="Collapse sidebar" aria-label="Toggle sidebar">
       <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><path d="M4 6h16M4 12h10M4 18h16"/><path d="M19 9l3 3-3 3"/></svg>

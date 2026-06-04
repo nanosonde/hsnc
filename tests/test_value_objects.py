@@ -4,7 +4,7 @@ from __future__ import annotations
 
 import pytest
 
-from omada_clone.domain.value_objects import (
+from omui_clone.domain.value_objects import (
     DataVolume,
     IpAddress,
     MacAddress,

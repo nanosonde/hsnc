@@ -4,12 +4,12 @@ from __future__ import annotations
 
 import copy
 
-from omada_clone.application.use_cases.apply_config import ApplyConfig, PlanApply
-from omada_clone.application.use_cases.config_diff import GetConfigDiff
-from omada_clone.domain.entities import Device, Vlan
-from omada_clone.domain.enums import DeviceKind, DeviceStatus
-from omada_clone.domain.interfaces import DeviceAdapter, DeviceAdapterFactory
-from omada_clone.domain.value_objects import MacAddress
+from omui_clone.application.use_cases.apply_config import ApplyConfig, PlanApply
+from omui_clone.application.use_cases.config_diff import GetConfigDiff
+from omui_clone.domain.entities import Device, Vlan
+from omui_clone.domain.enums import DeviceKind, DeviceStatus
+from omui_clone.domain.interfaces import DeviceAdapter, DeviceAdapterFactory
+from omui_clone.domain.value_objects import MacAddress
 
 from .fakes import (
     FakeAppliedConfigStore,

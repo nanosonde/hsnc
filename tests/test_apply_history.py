@@ -4,8 +4,8 @@ from __future__ import annotations
 
 from datetime import UTC, datetime
 
-from omada_clone.application.use_cases.apply_history import ListApplyHistory
-from omada_clone.domain.entities import ApplyEvent, ApplyOutcome
+from omui_clone.application.use_cases.apply_history import ListApplyHistory
+from omui_clone.domain.entities import ApplyEvent, ApplyOutcome
 
 from .fakes import FakeApplyHistoryStore
 

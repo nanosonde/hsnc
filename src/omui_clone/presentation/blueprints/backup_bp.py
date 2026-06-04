@@ -37,7 +37,7 @@ def export():
         io.BytesIO(data),
         mimetype="application/zip",
         as_attachment=True,
-        download_name=f"omada-backup-{stamp}.zip",
+        download_name=f"omui-backup-{stamp}.zip",
     )
 
 

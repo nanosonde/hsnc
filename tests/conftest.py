@@ -4,14 +4,14 @@ from __future__ import annotations
 
 import pytest
 
-from omada_clone.domain.entities import Client, Device, Site, User
-from omada_clone.domain.enums import (
+from omui_clone.domain.entities import Client, Device, Site, User
+from omui_clone.domain.enums import (
     ConnectionType,
     DeviceKind,
     DeviceStatus,
     Role,
 )
-from omada_clone.domain.value_objects import (
+from omui_clone.domain.value_objects import (
     DataVolume,
     IpAddress,
     MacAddress,

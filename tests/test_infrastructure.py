@@ -6,19 +6,19 @@ from datetime import UTC
 
 import pytest
 
-from omada_clone.application.use_cases.backup import ExportBackup, ImportBackup
-from omada_clone.domain.entities import (
+from omui_clone.application.use_cases.backup import ExportBackup, ImportBackup
+from omui_clone.domain.entities import (
     AssociationFailure,
     Client,
     Device,
 )
-from omada_clone.domain.enums import ConnectionType, DeviceKind, DeviceStatus
-from omada_clone.domain.value_objects import IpAddress, MacAddress
-from omada_clone.infrastructure.config.yaml_config_repository import (
+from omui_clone.domain.enums import ConnectionType, DeviceKind, DeviceStatus
+from omui_clone.domain.value_objects import IpAddress, MacAddress
+from omui_clone.infrastructure.config.yaml_config_repository import (
     YamlConfigRepository,
 )
-from omada_clone.infrastructure.devices.factory import DefaultDeviceAdapterFactory
-from omada_clone.infrastructure.persistence.sqlite_runtime_store import (
+from omui_clone.infrastructure.devices.factory import DefaultDeviceAdapterFactory
+from omui_clone.infrastructure.persistence.sqlite_runtime_store import (
     SqliteRuntimeStore,
 )
 
@@ -116,7 +116,7 @@ def test_sqlite_import_rows_replaces(tmp_path):
 def test_sqlite_apply_event_persists_and_roundtrips(tmp_path):
     from datetime import datetime
 
-    from omada_clone.domain.entities import ApplyEvent, ApplyOutcome
+    from omui_clone.domain.entities import ApplyEvent, ApplyOutcome
 
     store = SqliteRuntimeStore(tmp_path / "rt.db")
     event = ApplyEvent(

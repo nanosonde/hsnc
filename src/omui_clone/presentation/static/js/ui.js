@@ -1,5 +1,5 @@
 (function () {
-  var KEY = "omada.nav.collapsed";
+  var KEY = "omui.nav.collapsed";
   var shell = document.getElementById("app-shell");
   var toggle = document.getElementById("nav-toggle");
   if (!shell || !toggle) return;

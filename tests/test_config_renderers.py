@@ -4,11 +4,11 @@ from __future__ import annotations
 
 import copy
 
-from omada_clone.application.use_cases.config_diff import GetConfigDiff
-from omada_clone.domain.entities import Device, SwitchPort, Vlan
-from omada_clone.domain.enums import DeviceKind, PortMode
-from omada_clone.domain.value_objects import IpAddress, MacAddress
-from omada_clone.infrastructure.devices.config_renderers import (
+from omui_clone.application.use_cases.config_diff import GetConfigDiff
+from omui_clone.domain.entities import Device, SwitchPort, Vlan
+from omui_clone.domain.enums import DeviceKind, PortMode
+from omui_clone.domain.value_objects import IpAddress, MacAddress
+from omui_clone.infrastructure.devices.config_renderers import (
     DefaultConfigRendererFactory,
     JetStreamCliRenderer,
     UciConfigRenderer,

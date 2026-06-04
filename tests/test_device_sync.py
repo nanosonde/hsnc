@@ -2,12 +2,12 @@
 
 from __future__ import annotations
 
-from omada_clone.application.use_cases.delete_device import DeleteDevice
-from omada_clone.application.use_cases.sync_device_config import SyncDeviceConfig
-from omada_clone.domain.entities import Device
-from omada_clone.domain.enums import DeviceKind, DeviceStatus
-from omada_clone.domain.interfaces import DeviceAdapter, DeviceAdapterFactory
-from omada_clone.domain.value_objects import MacAddress
+from omui_clone.application.use_cases.delete_device import DeleteDevice
+from omui_clone.application.use_cases.sync_device_config import SyncDeviceConfig
+from omui_clone.domain.entities import Device
+from omui_clone.domain.enums import DeviceKind, DeviceStatus
+from omui_clone.domain.interfaces import DeviceAdapter, DeviceAdapterFactory
+from omui_clone.domain.value_objects import MacAddress
 
 from .fakes import (
     FakeAdapterFactory,
@@ -106,7 +106,7 @@ def test_delete_device_removes_from_inventory_and_snapshot(config):
 
 
 def test_mock_adapter_fetch_config_returns_device():
-    from omada_clone.infrastructure.devices.mock_adapter import MockDeviceAdapter
+    from omui_clone.infrastructure.devices.mock_adapter import MockDeviceAdapter
 
     device = Device(
         id="switch-1",

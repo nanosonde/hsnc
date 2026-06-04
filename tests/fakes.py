@@ -5,7 +5,7 @@ from __future__ import annotations
 from collections.abc import Iterable
 from datetime import datetime
 
-from omada_clone.domain.entities import (
+from omui_clone.domain.entities import (
     ApplyEvent,
     AssociationFailure,
     Client,
@@ -16,7 +16,7 @@ from omada_clone.domain.entities import (
     TopologyNode,
     User,
 )
-from omada_clone.domain.interfaces import (
+from omui_clone.domain.interfaces import (
     AppliedConfigStore,
     ApplyHistoryStore,
     ConfigRepository,

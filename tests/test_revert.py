@@ -4,9 +4,9 @@ from __future__ import annotations
 
 import copy
 
-from omada_clone.application.use_cases.config_diff import GetConfigDiff
-from omada_clone.application.use_cases.revert_config import RevertPendingChanges
-from omada_clone.domain.entities import Vlan
+from omui_clone.application.use_cases.config_diff import GetConfigDiff
+from omui_clone.application.use_cases.revert_config import RevertPendingChanges
+from omui_clone.domain.entities import Vlan
 
 from .fakes import FakeAppliedConfigStore, FakeConfigWriter
 

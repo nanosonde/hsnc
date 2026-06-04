@@ -4,7 +4,7 @@ from __future__ import annotations
 
 
 def humanize_uptime(seconds: int) -> str:
-    """Format a duration like Omada does: ``2d 3h``, ``26m 58s``, ``5s``."""
+    """Format a duration compactly: ``2d 3h``, ``26m 58s``, ``5s``."""
 
     if seconds <= 0:
         return "-"
