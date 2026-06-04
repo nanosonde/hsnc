@@ -1,0 +1,380 @@
+#!/usr/bin/env python3
+"""Fake TP-Link JetStream CLI for the mock switch device.
+
+Acts as the login shell (sshd ForceCommand) for the `admin` user. It emulates just
+enough of the JetStream CLI for the sdn-manager switch adapter/renderer:
+
+  config:  enable, configure[ terminal], hostname, vlan/name/exit,
+           interface gigabitEthernet 1/0/N, switchport mode/access vlan/
+           general allowed vlan/pvid, shutdown/no shutdown, end,
+           copy running-config startup-config
+  show:    show running-config, show system-info, show interface status,
+           show mac address-table
+
+It works for BOTH transports:
+  * `ssh admin@host "<cmd>"`        -> command(s) in $SSH_ORIGINAL_COMMAND
+  * interactive `invoke_shell`      -> commands read line-by-line from stdin
+  * piped `exec_command` with stdin -> commands read line-by-line from stdin
+
+Running config is persisted to running.json; `copy running-config startup-config`
+writes startup.json, which is what survives a container restart.
+"""
+from __future__ import annotations
+
+import json
+import os
+import sys
+
+STATE_DIR = os.environ.get("MOCK_STATE_DIR", "/var/lib/mockdev")
+RUNNING = os.path.join(STATE_DIR, "running.json")
+STARTUP = os.path.join(STATE_DIR, "startup.json")
+
+_DEFAULT = {
+    "hostname": "TL-SG2210P",
+    "vlans": {"1": "System-VLAN"},
+    "ports": {},
+}
+
+
+def load_config() -> dict:
+    if os.path.exists(RUNNING):
+        with open(RUNNING, encoding="utf-8") as handle:
+            return json.load(handle)
+    if os.path.exists(STARTUP):
+        with open(STARTUP, encoding="utf-8") as handle:
+            return json.load(handle)
+    return json.loads(json.dumps(_DEFAULT))
+
+
+def save_running(config: dict) -> None:
+    os.makedirs(STATE_DIR, exist_ok=True)
+    tmp = RUNNING + ".tmp"
+    with open(tmp, "w", encoding="utf-8") as handle:
+        json.dump(config, handle, indent=2)
+    os.replace(tmp, RUNNING)
+
+
+def save_startup(config: dict) -> None:
+    os.makedirs(STATE_DIR, exist_ok=True)
+    with open(STARTUP, "w", encoding="utf-8") as handle:
+        json.dump(config, handle, indent=2)
+
+
+class _ClientGone(Exception):
+    """Raised when the SSH client closes the connection mid-output."""
+
+
+def _port(config: dict, num: str) -> dict:
+    return config["ports"].setdefault(
+        num,
+        {"mode": "access", "pvid": 1, "access_vlan": 1, "allowed": [1], "enabled": True},
+    )
+
+
+class Session:
+    """A JetStream CLI session driven by a stream of input lines."""
+
+    def __init__(self, out, interactive: bool):
+        self.config = load_config()
+        self.out = out
+        self.interactive = interactive
+        self.mode = "user"  # user | priv | config | vlan | iface
+        self.ctx_vlan: str | None = None
+        self.ctx_port: str | None = None
+        self.dirty = False
+
+    # -- prompt / output helpers ------------------------------------------------
+    def prompt(self) -> str:
+        host = self.config.get("hostname", "Switch")
+        if self.mode == "user":
+            return f"{host}>"
+        if self.mode == "priv":
+            return f"{host}#"
+        if self.mode == "config":
+            return f"{host}(config)#"
+        if self.mode == "vlan":
+            return f"{host}(config-vlan)#"
+        if self.mode == "iface":
+            return f"{host}(config-if)#"
+        return f"{host}#"
+
+    def emit(self, text: str = "") -> None:
+        try:
+            self.out.write(text + "\n")
+            self.out.flush()
+        except BrokenPipeError:
+            raise _ClientGone from None
+
+    # -- main dispatch ----------------------------------------------------------
+    def run(self, lines) -> None:
+        try:
+            if self.interactive:
+                self.emit(self.config.get("hostname", "Switch") + " login: admin")
+                self._write_prompt()
+            for raw in lines:
+                line = raw.rstrip("\r\n")
+                stripped = line.strip()
+                if stripped and not self._dispatch(stripped):
+                    break
+                if self.interactive:
+                    self._write_prompt()
+        except _ClientGone:
+            pass
+        finally:
+            if self.dirty:
+                save_running(self.config)
+
+    def _write_prompt(self) -> None:
+        try:
+            self.out.write(self.prompt() + " ")
+            self.out.flush()
+        except BrokenPipeError:
+            raise _ClientGone from None
+
+    def _dispatch(self, line: str) -> bool:
+        """Process one command line. Returns False to end the session."""
+        words = line.split()
+        cmd = words[0].lower()
+
+        if cmd in ("exit", "quit", "logout"):
+            return self._do_exit()
+        if cmd == "end":
+            self.mode = "priv" if self.mode != "user" else "user"
+            self.ctx_vlan = self.ctx_port = None
+            return True
+        if cmd == "enable":
+            self.mode = "priv"
+            return True
+        if cmd == "disable":
+            self.mode = "user"
+            return True
+        if cmd in ("configure", "config"):
+            self.mode = "config"  # tolerant: auto-enable
+            return True
+        if cmd == "hostname" and len(words) >= 2:
+            self.config["hostname"] = words[1]
+            self.dirty = True
+            return True
+        if cmd == "vlan" and len(words) >= 2:
+            return self._do_vlan(words[1])
+        if cmd == "name" and self.mode == "vlan" and len(words) >= 2:
+            self.config["vlans"][self.ctx_vlan] = " ".join(words[1:])
+            self.dirty = True
+            return True
+        if cmd in ("no",) and len(words) >= 2:
+            return self._do_no(words[1:])
+        if cmd == "interface":
+            return self._do_interface(words[1:])
+        if cmd == "switchport":
+            return self._do_switchport(words[1:])
+        if cmd == "shutdown":
+            return self._set_port_enabled(False)
+        if cmd == "copy" and "startup-config" in words:
+            save_running(self.config)
+            self.dirty = False
+            save_startup(self.config)
+            self.emit("Saving running-config to startup-config ... done.")
+            return True
+        if cmd == "show":
+            return self._do_show(words[1:])
+        if cmd in ("write", "wr") and self.mode in ("priv", "config"):
+            save_running(self.config)
+            save_startup(self.config)
+            self.dirty = False
+            self.emit("[OK]")
+            return True
+        # Unknown but harmless -> JetStream-style error, keep session alive.
+        self.emit(f"% Unrecognized command: {line}")
+        return True
+
+    def _do_exit(self) -> bool:
+        if self.mode == "vlan":
+            self.mode = "config"
+            self.ctx_vlan = None
+            return True
+        if self.mode == "iface":
+            self.mode = "config"
+            self.ctx_port = None
+            return True
+        if self.mode == "config":
+            self.mode = "priv"
+            return True
+        return False  # exit from user/priv ends the session
+
+    def _do_vlan(self, vid: str) -> bool:
+        if not vid.isdigit():
+            self.emit("% Invalid VLAN id")
+            return True
+        self.config["vlans"].setdefault(vid, f"VLAN{vid}")
+        self.ctx_vlan = vid
+        self.mode = "vlan"
+        self.dirty = True
+        return True
+
+    def _do_no(self, rest: list[str]) -> bool:
+        head = rest[0].lower()
+        if head == "shutdown":
+            return self._set_port_enabled(True)
+        if head == "vlan" and len(rest) >= 2 and rest[1].isdigit():
+            self.config["vlans"].pop(rest[1], None)
+            self.dirty = True
+            return True
+        self.emit(f"% Unrecognized command: no {' '.join(rest)}")
+        return True
+
+    def _do_interface(self, rest: list[str]) -> bool:
+        # interface gigabitEthernet 1/0/N
+        if not rest:
+            self.emit("% Incomplete command")
+            return True
+        spec = rest[-1]
+        num = spec.split("/")[-1]
+        if not num.isdigit():
+            self.emit("% Invalid interface")
+            return True
+        _port(self.config, num)
+        self.ctx_port = num
+        self.mode = "iface"
+        return True
+
+    def _do_switchport(self, rest: list[str]) -> bool:
+        if self.mode != "iface" or self.ctx_port is None:
+            self.emit("% Command available in interface config mode")
+            return True
+        port = _port(self.config, self.ctx_port)
+        if not rest:
+            return True
+        sub = rest[0].lower()
+        if sub == "mode" and len(rest) >= 2:
+            port["mode"] = rest[1].lower()
+        elif sub == "access" and len(rest) >= 3 and rest[1].lower() == "vlan":
+            port["access_vlan"] = int(rest[2])
+            port["allowed"] = [int(rest[2])]
+            port["pvid"] = int(rest[2])
+        elif sub == "general" and len(rest) >= 4 and rest[1].lower() == "allowed":
+            # switchport general allowed vlan 1,10,20
+            port["allowed"] = [int(v) for v in rest[3].split(",") if v.isdigit()]
+        elif sub == "trunk" and len(rest) >= 4 and rest[1].lower() == "allowed":
+            port["allowed"] = [int(v) for v in rest[3].split(",") if v.isdigit()]
+        elif sub == "pvid" and len(rest) >= 2:
+            port["pvid"] = int(rest[1])
+        else:
+            self.emit(f"% Unrecognized switchport option: {' '.join(rest)}")
+            return True
+        self.dirty = True
+        return True
+
+    def _set_port_enabled(self, enabled: bool) -> bool:
+        if self.mode != "iface" or self.ctx_port is None:
+            self.emit("% Command available in interface config mode")
+            return True
+        _port(self.config, self.ctx_port)["enabled"] = enabled
+        self.dirty = True
+        return True
+
+    # -- show commands ----------------------------------------------------------
+    def _do_show(self, rest: list[str]) -> bool:
+        target = " ".join(rest).lower()
+        if target.startswith("running-config") or target.startswith("startup-config"):
+            self._show_running()
+        elif target.startswith("system-info"):
+            self._show_system_info()
+        elif target.startswith("interface status") or target == "interface":
+            self._show_interface_status()
+        elif target.startswith("mac address-table") or target.startswith("mac-address-table"):
+            self._show_mac_table()
+        elif target.startswith("vlan"):
+            self._show_vlan()
+        else:
+            self.emit(f"% Unrecognized show command: {target}")
+        return True
+
+    def _show_running(self) -> None:
+        c = self.config
+        self.emit("#")
+        self.emit(f"hostname {c.get('hostname', 'Switch')}")
+        self.emit("#")
+        for vid in sorted(c["vlans"], key=int):
+            self.emit(f"vlan {vid}")
+            self.emit(f" name {c['vlans'][vid]}")
+        for num in sorted(c["ports"], key=int):
+            port = c["ports"][num]
+            self.emit("#")
+            self.emit(f"interface gigabitEthernet 1/0/{num}")
+            self.emit(f" switchport mode {port['mode']}")
+            if port["mode"] == "access":
+                self.emit(f" switchport access vlan {port.get('access_vlan', 1)}")
+            else:
+                allowed = ",".join(str(v) for v in port.get("allowed", [1]))
+                self.emit(f" switchport general allowed vlan {allowed}")
+            self.emit(f" switchport pvid {port.get('pvid', 1)}")
+            if not port.get("enabled", True):
+                self.emit(" shutdown")
+        self.emit("#")
+        self.emit("end")
+
+    def _show_system_info(self) -> None:
+        c = self.config
+        rows = [
+            ("Device Description", "JetStream Gigabit Smart Switch (mock)"),
+            ("Device Name", c.get("hostname", "Switch")),
+            ("Device Model", os.environ.get("MOCK_MODEL", "TL-SG2210P")),
+            ("Hardware Version", "TL-SG2210P 5.0"),
+            ("Software Version", "5.0.6 Build 20231010 (mock)"),
+            ("MAC Address", os.environ.get("MOCK_MAC", "00-11-22-33-44-02")),
+            ("System Time", "2026-06-04 12:00:00"),
+            ("Running Time", "3 days 04:21:09"),
+        ]
+        width = max(len(k) for k, _ in rows)
+        for key, value in rows:
+            self.emit(f"{key.ljust(width)} - {value}")
+
+    def _show_interface_status(self) -> None:
+        self.emit("Port      Status    Speed     Duplex    VLAN   Mode")
+        self.emit("--------  --------  --------  --------  -----  -------")
+        for num in sorted(self.config["ports"], key=int):
+            port = self.config["ports"][num]
+            status = "Up" if port.get("enabled", True) else "Down"
+            speed = "1000M" if status == "Up" else "Auto"
+            duplex = "Full" if status == "Up" else "Auto"
+            self.emit(
+                f"Gi1/0/{num:<3} {status:<9} {speed:<9} {duplex:<9} "
+                f"{port.get('pvid', 1):<6} {port['mode']}"
+            )
+
+    def _show_mac_table(self) -> None:
+        rows = [
+            ("00-11-22-aa-bb-01", 10, "1/0/1"),
+            ("00-11-22-aa-bb-02", 10, "1/0/2"),
+            ("00-11-22-aa-bb-03", 20, "1/0/3"),
+            ("a4-83-e7-00-33-44", 1, "1/0/8"),
+        ]
+        self.emit("MAC Address        VLAN   Port      Type")
+        self.emit("-----------------  -----  --------  -------")
+        for mac, vlan, port in rows:
+            self.emit(f"{mac}  {vlan:<6} Gi{port:<7} dynamic")
+
+    def _show_vlan(self) -> None:
+        self.emit("VLAN   Name              Status")
+        self.emit("-----  ----------------  -------")
+        for vid in sorted(self.config["vlans"], key=int):
+            self.emit(f"{vid:<6} {self.config['vlans'][vid]:<17} active")
+
+
+def main() -> int:
+    out = sys.stdout
+    interactive = sys.stdin.isatty()
+    session = Session(out, interactive)
+
+    original = os.environ.get("SSH_ORIGINAL_COMMAND", "").strip()
+    if original and not interactive:
+        # `ssh admin@host "cmd1; cmd2"` or newline-separated commands.
+        initial = original.replace(";", "\n").splitlines()
+        session.run(iter(initial))
+        return 0
+    session.run(sys.stdin)
+    return 0
+
+
+if __name__ == "__main__":
+    sys.exit(main())

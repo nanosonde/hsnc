@@ -1,0 +1,18 @@
+{
+  "hostname": "TL-SG2210P",
+  "vlans": {
+    "1": "System-VLAN",
+    "10": "servers",
+    "20": "guests"
+  },
+  "ports": {
+    "1": {"mode": "access", "pvid": 1, "access_vlan": 1, "allowed": [1], "enabled": true},
+    "2": {"mode": "access", "pvid": 10, "access_vlan": 10, "allowed": [10], "enabled": true},
+    "3": {"mode": "access", "pvid": 20, "access_vlan": 20, "allowed": [20], "enabled": true},
+    "4": {"mode": "access", "pvid": 1, "access_vlan": 1, "allowed": [1], "enabled": true},
+    "5": {"mode": "general", "pvid": 1, "access_vlan": 1, "allowed": [1, 10, 20], "enabled": true},
+    "6": {"mode": "general", "pvid": 1, "access_vlan": 1, "allowed": [1, 10, 20], "enabled": true},
+    "7": {"mode": "access", "pvid": 1, "access_vlan": 1, "allowed": [1], "enabled": false},
+    "8": {"mode": "general", "pvid": 1, "access_vlan": 1, "allowed": [1, 10, 20], "enabled": true}
+  }
+}

@@ -1,0 +1,156 @@
+#!/usr/bin/env python3
+"""Minimal fake `ubus` for the mock OpenWrt device.
+
+Implements the read surface the sdn-manager OpenWrt adapter uses:
+
+    ubus call system board
+    ubus call network.interface.<name> status
+    ubus call iwinfo assoclist '{"device":"<wifi-if>"}'
+    ubus call dhcp ipv4leases          (plus the /tmp/dhcp.leases file)
+
+Values that depend on configuration (hostname, lan ipv4) are read live from the
+fake `uci` state so they reflect anything that was set + committed.
+"""
+from __future__ import annotations
+
+import json
+import os
+import subprocess
+import sys
+
+STATE_DIR = os.environ.get("MOCK_STATE_DIR", "/var/lib/mockdev")
+LEASES_FILE = os.path.join(STATE_DIR, "dhcp.leases")
+
+
+def _uci_get(path: str, default: str = "") -> str:
+    try:
+        out = subprocess.run(
+            ["uci", "get", path], capture_output=True, text=True, check=False
+        )
+        if out.returncode == 0:
+            return out.stdout.strip()
+    except OSError:
+        pass
+    return default
+
+
+def _hostname() -> str:
+    return _uci_get("system.@system[0].hostname", "OpenWrt")
+
+
+def system_board() -> dict:
+    hostname = _hostname()
+    return {
+        "kernel": "5.15.150",
+        "hostname": hostname,
+        "system": "ARMv8 Processor",
+        "model": os.environ.get("MOCK_MODEL", "TP-Link ER605 (mock)"),
+        "board_name": os.environ.get("MOCK_BOARD", "tplink,er605"),
+        "release": {
+            "distribution": "OpenWrt",
+            "version": "23.05.3",
+            "revision": "r23809-mock",
+            "target": "ramips/mt7621",
+            "description": "OpenWrt 23.05.3 (mock device)",
+        },
+    }
+
+
+def interface_status(name: str) -> dict:
+    ipaddr = _uci_get(f"network.{name}.ipaddr")
+    netmask = _uci_get(f"network.{name}.netmask", "255.255.255.0")
+    proto = _uci_get(f"network.{name}.proto", "static")
+    prefix = _netmask_to_prefix(netmask)
+    result = {
+        "up": True,
+        "pending": False,
+        "available": True,
+        "autostart": True,
+        "proto": proto or "static",
+        "device": f"br-{name}" if name == "lan" else name,
+        "l3_device": f"br-{name}" if name == "lan" else name,
+        "uptime": 4242,
+        "ipv4-address": [],
+        "ipv6-address": [],
+    }
+    if ipaddr:
+        result["ipv4-address"] = [{"address": ipaddr, "mask": prefix}]
+    return result
+
+
+def _netmask_to_prefix(netmask: str) -> int:
+    try:
+        return sum(bin(int(o)).count("1") for o in netmask.split("."))
+    except (ValueError, AttributeError):
+        return 24
+
+
+def _read_leases() -> list[dict]:
+    leases: list[dict] = []
+    path = LEASES_FILE if os.path.exists(LEASES_FILE) else "/tmp/dhcp.leases"
+    if not os.path.exists(path):
+        return leases
+    with open(path, encoding="utf-8") as handle:
+        for raw in handle:
+            parts = raw.split()
+            if len(parts) >= 4:
+                leases.append(
+                    {
+                        "expires": int(parts[0]) if parts[0].isdigit() else 0,
+                        "mac": parts[1],
+                        "address": parts[2],
+                        "hostname": parts[3] if parts[3] != "*" else "",
+                    }
+                )
+    return leases
+
+
+def iwinfo_assoclist(device: str) -> dict:
+    leases = _read_leases()
+    results = []
+    for lease in leases[:4]:
+        results.append(
+            {
+                "mac": lease["mac"].upper(),
+                "signal": -55,
+                "noise": -95,
+                "rx": {"rate": 86700, "mcs": 7},
+                "tx": {"rate": 86700, "mcs": 7},
+            }
+        )
+    return {"results": results}
+
+
+def dhcp_leases() -> dict:
+    return {"device": {"br-lan": {"ipv4-leases": _read_leases()}}}
+
+
+def main(argv: list[str]) -> int:
+    if len(argv) >= 2 and argv[0] == "call":
+        obj = argv[1]
+        method = argv[2] if len(argv) >= 3 else ""
+        if obj == "system" and method == "board":
+            print(json.dumps(system_board(), indent=2))
+            return 0
+        if obj.startswith("network.interface."):
+            name = obj.split("network.interface.", 1)[1]
+            print(json.dumps(interface_status(name), indent=2))
+            return 0
+        if obj == "iwinfo":
+            device = "wlan0"
+            if len(argv) >= 4:
+                try:
+                    device = json.loads(argv[3]).get("device", device)
+                except (ValueError, AttributeError):
+                    pass
+            print(json.dumps(iwinfo_assoclist(device), indent=2))
+            return 0
+        if obj == "dhcp":
+            print(json.dumps(dhcp_leases(), indent=2))
+            return 0
+    sys.stderr.write("ubus: command not supported by mock\n")
+    return 1
+
+
+if __name__ == "__main__":
+    sys.exit(main(sys.argv[1:]))

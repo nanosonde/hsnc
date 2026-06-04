@@ -1,0 +1,323 @@
+#!/usr/bin/env python3
+"""Minimal fake `uci` for the mock OpenWrt device.
+
+Implements just the surface the sdn-manager OpenWrt adapter/renderer uses:
+
+    uci show [<pkg>[.<section>[.<option>]]]
+    uci get  <pkg>.<section>.<option>
+    uci set  <pkg>.<section>=<type>
+    uci set  <pkg>.<section>.<option>=<value>
+    uci add  <pkg> <type>            (prints generated section id)
+    uci add_list <pkg>.<section>.<option>=<value>
+    uci delete <pkg>.<section>[.<option>]
+    uci commit [<pkg>]               (no-op: state is persisted on every write)
+    uci batch                        (reads the above commands, one per line, from stdin)
+
+State is persisted in canonical `uci show` format at $MOCK_STATE_DIR/uci.conf so a
+fresh `uci` process always sees the latest committed values. Section references support
+named sections (network.lan) and anonymous ones (network.@bridge-vlan[0] /[-1]).
+"""
+from __future__ import annotations
+
+import os
+import re
+import sys
+
+STATE_DIR = os.environ.get("MOCK_STATE_DIR", "/var/lib/mockdev")
+STATE_FILE = os.path.join(STATE_DIR, "uci.conf")
+
+# state: { package: [ {"name": str|None, "type": str, "options": {opt: str|list[str]}} ] }
+State = dict[str, list[dict]]
+
+_LINE_RE = re.compile(r"^([^.=]+)\.([^.=]+)(?:\.([^=]+))?=(.*)$")
+_ANON_RE = re.compile(r"^@([^\[]+)\[(-?\d+)\]$")
+
+
+def _strip_quotes(value: str) -> str:
+    value = value.strip()
+    if len(value) >= 2 and value[0] == value[-1] and value[0] in "'\"":
+        return value[1:-1]
+    return value
+
+
+def _split_list(value: str) -> list[str]:
+    # 'a' 'b' 'c'  ->  ["a", "b", "c"]
+    tokens = re.findall(r"'[^']*'|\"[^\"]*\"|\S+", value)
+    return [_strip_quotes(tok) for tok in tokens]
+
+
+def load_state() -> State:
+    state: State = {}
+    if not os.path.exists(STATE_FILE):
+        return state
+    with open(STATE_FILE, encoding="utf-8") as handle:
+        for raw in handle:
+            line = raw.rstrip("\n")
+            if not line.strip() or line.lstrip().startswith("#"):
+                continue
+            match = _LINE_RE.match(line.strip())
+            if not match:
+                continue
+            pkg, section, option, value = match.groups()
+            sections = state.setdefault(pkg, [])
+            sec = _ensure_section(sections, section)
+            if option is None:
+                sec["type"] = _strip_quotes(value)
+            else:
+                values = _split_list(value)
+                sec["options"][option] = values if len(values) > 1 else (values[0] if values else "")
+    return state
+
+
+def _ensure_section(sections: list[dict], ref: str) -> dict:
+    anon = _ANON_RE.match(ref)
+    if anon:
+        sec_type, idx_s = anon.group(1), int(anon.group(2))
+        typed = [s for s in sections if s["type"] == sec_type]
+        if -len(typed) <= idx_s < len(typed):
+            return typed[idx_s]
+        sec = {"name": None, "type": sec_type, "options": {}}
+        sections.append(sec)
+        return sec
+    for sec in sections:
+        if sec["name"] == ref:
+            return sec
+    sec = {"name": ref, "type": "", "options": {}}
+    sections.append(sec)
+    return sec
+
+
+def _resolve_section(sections: list[dict], ref: str):
+    anon = _ANON_RE.match(ref)
+    if anon:
+        sec_type, idx_s = anon.group(1), int(anon.group(2))
+        typed = [s for s in sections if s["type"] == sec_type]
+        if -len(typed) <= idx_s < len(typed):
+            return typed[idx_s]
+        return None
+    for sec in sections:
+        if sec["name"] == ref:
+            return sec
+    return None
+
+
+def _section_label(sections: list[dict], sec: dict) -> str:
+    if sec["name"]:
+        return sec["name"]
+    typed = [s for s in sections if s["type"] == sec["type"]]
+    return f"@{sec['type']}[{typed.index(sec)}]"
+
+
+def save_state(state: State) -> None:
+    os.makedirs(STATE_DIR, exist_ok=True)
+    lines: list[str] = []
+    for pkg, sections in state.items():
+        for sec in sections:
+            label = _section_label(sections, sec)
+            lines.append(f"{pkg}.{label}={sec['type']}")
+            for opt, val in sec["options"].items():
+                if isinstance(val, list):
+                    rendered = " ".join(f"'{v}'" for v in val)
+                else:
+                    rendered = f"'{val}'"
+                lines.append(f"{pkg}.{label}.{opt}={rendered}")
+    tmp = STATE_FILE + ".tmp"
+    with open(tmp, "w", encoding="utf-8") as handle:
+        handle.write("\n".join(lines) + ("\n" if lines else ""))
+    os.replace(tmp, STATE_FILE)
+
+
+def _quote(val) -> str:
+    if isinstance(val, list):
+        return " ".join(f"'{v}'" for v in val)
+    return f"'{val}'"
+
+
+def _print_section(out, state: State, pkg: str, sec: dict) -> None:
+    label = _section_label(state[pkg], sec)
+    out.append(f"{pkg}.{label}={sec['type']}")
+    for opt, val in sec["options"].items():
+        out.append(f"{pkg}.{label}.{opt}={_quote(val)}")
+
+
+def cmd_show(state: State, target: str | None) -> int:
+    out: list[str] = []
+    if not target:
+        for pkg in state:
+            for sec in state[pkg]:
+                _print_section(out, state, pkg, sec)
+        print("\n".join(out))
+        return 0
+    parts = target.split(".")
+    pkg = parts[0]
+    if pkg not in state:
+        sys.stderr.write(f"uci: Entry not found\n")
+        return 1
+    if len(parts) == 1:
+        for sec in state[pkg]:
+            _print_section(out, state, pkg, sec)
+    elif len(parts) == 2:
+        sec = _resolve_section(state[pkg], parts[1])
+        if sec is None:
+            sys.stderr.write("uci: Entry not found\n")
+            return 1
+        _print_section(out, state, pkg, sec)
+    else:
+        sec = _resolve_section(state[pkg], parts[1])
+        if sec is None or parts[2] not in sec["options"]:
+            sys.stderr.write("uci: Entry not found\n")
+            return 1
+        label = _section_label(state[pkg], sec)
+        out.append(f"{pkg}.{label}.{parts[2]}={_quote(sec['options'][parts[2]])}")
+    print("\n".join(out))
+    return 0
+
+
+def cmd_get(state: State, target: str) -> int:
+    parts = target.split(".")
+    if len(parts) < 2:
+        sys.stderr.write("uci: Invalid argument\n")
+        return 1
+    pkg = parts[0]
+    if pkg not in state:
+        sys.stderr.write("uci: Entry not found\n")
+        return 1
+    sec = _resolve_section(state[pkg], parts[1])
+    if sec is None:
+        sys.stderr.write("uci: Entry not found\n")
+        return 1
+    if len(parts) == 2:
+        print(sec["type"])
+        return 0
+    val = sec["options"].get(parts[2])
+    if val is None:
+        sys.stderr.write("uci: Entry not found\n")
+        return 1
+    print(" ".join(val) if isinstance(val, list) else val)
+    return 0
+
+
+def cmd_set(state: State, assignment: str) -> int:
+    if "=" not in assignment:
+        sys.stderr.write("uci: Invalid argument\n")
+        return 1
+    target, value = assignment.split("=", 1)
+    value = _strip_quotes(value)
+    parts = target.split(".")
+    pkg = parts[0]
+    sections = state.setdefault(pkg, [])
+    sec = _ensure_section(sections, parts[1])
+    if len(parts) == 2:
+        sec["type"] = value
+    else:
+        sec["options"][parts[2]] = value
+    return 0
+
+
+def cmd_add(state: State, pkg: str, sec_type: str) -> int:
+    sections = state.setdefault(pkg, [])
+    sec = {"name": None, "type": sec_type, "options": {}}
+    sections.append(sec)
+    typed_index = [s for s in sections if s["type"] == sec_type].index(sec)
+    print(f"{pkg}.@{sec_type}[{typed_index}]")
+    return 0
+
+
+def cmd_add_list(state: State, assignment: str) -> int:
+    if "=" not in assignment:
+        sys.stderr.write("uci: Invalid argument\n")
+        return 1
+    target, value = assignment.split("=", 1)
+    value = _strip_quotes(value)
+    parts = target.split(".")
+    if len(parts) != 3:
+        sys.stderr.write("uci: Invalid argument\n")
+        return 1
+    sec = _ensure_section(state.setdefault(parts[0], []), parts[1])
+    existing = sec["options"].get(parts[2])
+    if existing is None:
+        sec["options"][parts[2]] = [value]
+    elif isinstance(existing, list):
+        existing.append(value)
+    else:
+        sec["options"][parts[2]] = [existing, value]
+    return 0
+
+
+def cmd_delete(state: State, target: str) -> int:
+    parts = target.split(".")
+    pkg = parts[0]
+    if pkg not in state:
+        return 0
+    if len(parts) == 2:
+        sec = _resolve_section(state[pkg], parts[1])
+        if sec is not None:
+            state[pkg].remove(sec)
+    elif len(parts) == 3:
+        sec = _resolve_section(state[pkg], parts[1])
+        if sec is not None:
+            sec["options"].pop(parts[2], None)
+    return 0
+
+
+def dispatch(state: State, argv: list[str]) -> tuple[int, bool]:
+    """Run one uci subcommand. Returns (exit_code, mutated)."""
+    if not argv:
+        return 0, False
+    cmd, rest = argv[0], argv[1:]
+    if cmd == "show":
+        return cmd_show(state, rest[0] if rest else None), False
+    if cmd == "get":
+        return cmd_get(state, rest[0]), False
+    if cmd == "set":
+        return cmd_set(state, rest[0]), True
+    if cmd == "add":
+        return cmd_add(state, rest[0], rest[1]), True
+    if cmd == "add_list":
+        return cmd_add_list(state, rest[0]), True
+    if cmd == "delete":
+        return cmd_delete(state, rest[0]), True
+    if cmd == "commit":
+        return 0, False  # state already persisted on each write
+    sys.stderr.write(f"uci: unknown command '{cmd}'\n")
+    return 1, False
+
+
+def run_batch(state: State) -> int:
+    mutated = False
+    code = 0
+    for raw in sys.stdin:
+        line = raw.strip()
+        if not line or line.startswith("#"):
+            continue
+        tokens = _tokenize(line)
+        if tokens and tokens[0] == "uci":
+            tokens = tokens[1:]
+        rc, changed = dispatch(state, tokens)
+        mutated = mutated or changed
+        code = code or rc
+    if mutated:
+        save_state(state)
+    return code
+
+
+def _tokenize(line: str) -> list[str]:
+    return [_strip_quotes(t) if t[0] in "'\"" else t
+            for t in re.findall(r"'[^']*'|\"[^\"]*\"|\S+", line)]
+
+
+def main(argv: list[str]) -> int:
+    if not argv:
+        sys.stderr.write("Usage: uci [show|get|set|add|add_list|delete|commit|batch] ...\n")
+        return 1
+    state = load_state()
+    if argv[0] == "batch":
+        return run_batch(state)
+    rc, mutated = dispatch(state, argv)
+    if mutated:
+        save_state(state)
+    return rc
+
+
+if __name__ == "__main__":
+    sys.exit(main(sys.argv[1:]))

@@ -1,0 +1,78 @@
+# Mock network devices for sdn-manager.
+#
+# Brings up two SSH-accessible device simulators that the real device adapters
+# (OpenWrtSshAdapter / JetStreamCliAdapter) can target:
+#
+#   mock-openwrt    OpenWrt router/AP  -> ssh -p 2201 root@localhost   (pw: openwrt)
+#   mock-jetstream  JetStream switch   -> ssh -p 2202 admin@localhost  (pw: admin)
+#
+# Usage:
+#   docker compose -f mocks/docker-compose.yml up -d --build
+#   docker compose -f mocks/docker-compose.yml down            # keep state volumes
+#   docker compose -f mocks/docker-compose.yml down -v         # wipe state volumes
+
+services:
+  mock-openwrt:
+    build: ./openwrt
+    image: sdnman/mock-openwrt
+    container_name: mock-openwrt
+    hostname: mock-openwrt
+    ports:
+      - "2201:22"
+    environment:
+      MOCK_SSH_USER: root
+      MOCK_SSH_PASSWORD: ${MOCK_OPENWRT_PASSWORD:-openwrt}
+      MOCK_MODEL: "TP-Link ER605 (mock)"
+      MOCK_BOARD: "tplink,er605"
+      # MOCK_SSH_PUBKEY: "ssh-ed25519 AAAA... user@host"
+    volumes:
+      - openwrt-state:/var/lib/mockdev
+    networks:
+      - mocknet
+
+  mock-jetstream:
+    build: ./jetstream
+    image: sdnman/mock-jetstream
+    container_name: mock-jetstream
+    hostname: mock-jetstream
+    ports:
+      - "2202:22"
+    environment:
+      MOCK_SSH_USER: admin
+      MOCK_SSH_PASSWORD: ${MOCK_JETSTREAM_PASSWORD:-admin}
+      MOCK_MODEL: "TL-SG2210P"
+      MOCK_MAC: "00-11-22-33-44-02"
+      # MOCK_SSH_PUBKEY: "ssh-ed25519 AAAA... user@host"
+    volumes:
+      - jetstream-state:/var/lib/mockdev
+    networks:
+      - mocknet
+
+  # Optional: run sdn-manager against the mocks instead of the in-process mock
+  # adapter. The real SSH adapters are still stubs, so this is provided for when
+  # they are implemented. Enable with:  --profile controller
+  controller:
+    profiles: ["controller"]
+    build:
+      context: ..
+      dockerfile: Dockerfile
+    image: sdnman/controller
+    container_name: sdnman-controller
+    depends_on:
+      - mock-openwrt
+      - mock-jetstream
+    environment:
+      SDNMAN_SECRET_KEY: dev-secret-change-me
+      SDNMAN_USE_MOCK_DEVICES: "0"
+    ports:
+      - "8080:8080"
+    networks:
+      - mocknet
+
+volumes:
+  openwrt-state:
+  jetstream-state:
+
+networks:
+  mocknet:
+    driver: bridge
