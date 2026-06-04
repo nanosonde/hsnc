@@ -102,6 +102,12 @@ a:hover { text-decoration: underline; }
 .sidebar .nav-item.active { color: var(--accent); background: var(--accent-tint); }
 .sidebar .nav-item.active .nav-label { font-weight: 600; }
 .sidebar .nav-item svg { width: 20px; height: 20px; flex: none; }
+.sidebar .nav-section {
+  font-size: 12px; color: var(--muted);
+  padding: 0 12px; margin: 14px 0 4px;
+  text-transform: none; white-space: nowrap;
+}
+.sidebar .nav-section:first-of-type { margin-top: 4px; }
 .sidebar .nav-label {
   font-size: 14px; line-height: 1; opacity: 1;
   transition: opacity .12s ease;
@@ -118,6 +124,10 @@ a:hover { text-decoration: underline; }
 .app.nav-collapsed .sidebar-head { justify-content: center; padding: 0; }
 .app.nav-collapsed .sidebar .nav-toggle { margin: 0 auto; }
 .app.nav-collapsed .sidebar .nav-item { justify-content: center; padding: 0; width: 36px; margin: 0 auto; }
+.app.nav-collapsed .sidebar .nav-section {
+  font-size: 0; padding: 0; margin: 10px auto; width: 24px;
+  border-top: 1px solid var(--border);
+}
 .app.nav-collapsed .sidebar .nav-label { opacity: 0; width: 0; overflow: hidden; }
 .app.nav-collapsed .sidebar .nav-badge {
   position: absolute; top: 2px; right: 2px; margin: 0;

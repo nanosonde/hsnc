@@ -126,7 +126,7 @@ def pending():
     diff = container.get_config_diff.execute()
     plan = container.plan_apply.execute()
     return render_template(
-        "pending_changes.html", diff=diff, plan=plan, active="devices"
+        "pending_changes.html", diff=diff, plan=plan, active="pending"
     )
 
 
@@ -193,4 +193,4 @@ def revert_device(device_id: str):
 def history():
     container = _container()
     events = container.list_apply_history.execute()
-    return render_template("apply_history.html", events=events, active="devices")
+    return render_template("apply_history.html", events=events, active="history")
