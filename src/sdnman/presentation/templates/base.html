@@ -18,7 +18,7 @@
       <span class="site-name">{{ site_name }}</span>
     </div>
     <div class="spacer"></div>
-    <div class="readonly-control" title="Global read-only mode blocks all changes to devices">
+    <div class="readonly-control" title="Read-only mode blocks applying configuration to devices">
       {% if not is_read_only() %}<span class="ro-pill">Write enabled</span>{% endif %}
       {% if is_admin() %}
       <form method="post" action="{{ url_for('dashboard.toggle_read_only') }}" class="switch-form">
@@ -85,7 +85,7 @@
       {% if not is_read_only() %}
       <div class="readonly-banner" role="status">
         <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><rect x="5" y="11" width="14" height="9" rx="2"/><path d="M8 11V7a4 4 0 0 1 7.5-1.9"/></svg>
-        <span><strong>Write mode is active.</strong> Changes to devices are enabled. Turn on read-only to lock the system.</span>
+        <span><strong>Write mode is active.</strong> Applying configuration to devices is enabled. Turn on read-only to prevent applying changes.</span>
       </div>
       {% endif %}
       {% with messages = get_flashed_messages(with_categories=true) %}

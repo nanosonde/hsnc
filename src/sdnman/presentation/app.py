@@ -41,12 +41,11 @@ def create_app(settings: Settings | None = None) -> Flask:
 
     register_template_globals(app)
 
-    # Endpoints that stay reachable while the global read-only mode is active.
-    _READ_ONLY_ALLOWED = {
-        "auth.login",
-        "auth.logout",
-        "dashboard.toggle_read_only",
-        "static",
+    # Read-only mode only blocks applying configuration to physical devices.
+    # Re-reads, config edits and reverts remain available.
+    _READ_ONLY_BLOCKED = {
+        "config.apply",
+        "config.apply_device",
     }
 
     @app.before_request
@@ -55,9 +54,9 @@ def create_app(settings: Settings | None = None) -> Flask:
             return None
         if not app.config.get("READ_ONLY"):
             return None
-        if request.endpoint in _READ_ONLY_ALLOWED:
+        if request.endpoint not in _READ_ONLY_BLOCKED:
             return None
-        flash("Read-only mode is active \u2014 write operations are disabled.", "error")
+        flash("Read-only mode is active \u2014 applying changes to devices is disabled.", "error")
         return redirect(request.referrer or url_for("dashboard.index"))
 
     @app.context_processor
