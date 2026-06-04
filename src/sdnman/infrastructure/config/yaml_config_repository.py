@@ -15,6 +15,7 @@ import yaml
 
 from ...domain.entities import (
     Device,
+    DeviceConnection,
     Site,
     SwitchPort,
     User,
@@ -24,6 +25,7 @@ from ...domain.enums import DeviceKind, DeviceStatus, PortMode, Role
 from ...domain.interfaces import ConfigArchive, ConfigRepository, ConfigWriter
 from ...domain.value_objects import IpAddress, MacAddress
 from .schemas import (
+    ConnectionSchema,
     DeviceSchema,
     DevicesFileSchema,
     PortSchema,
@@ -163,6 +165,15 @@ class YamlConfigRepository(ConfigRepository, ConfigArchive, ConfigWriter):
             for p in schema.ports
         ]
         vlans = [Vlan(vlan_id=v.vlan_id, name=v.name, subnet=v.subnet) for v in schema.vlans]
+        connection = (
+            DeviceConnection(
+                host=schema.connection.host,
+                port=schema.connection.port,
+                username=schema.connection.username,
+            )
+            if schema.connection is not None
+            else None
+        )
         return Device(
             id=schema.id,
             name=schema.name,
@@ -176,6 +187,7 @@ class YamlConfigRepository(ConfigRepository, ConfigArchive, ConfigWriter):
             ports=ports,
             vlans=vlans,
             ssids=list(schema.ssids),
+            connection=connection,
         )
 
     @staticmethod
@@ -205,6 +217,15 @@ class YamlConfigRepository(ConfigRepository, ConfigArchive, ConfigWriter):
                 for v in device.vlans
             ],
             ssids=list(device.ssids),
+            connection=(
+                ConnectionSchema(
+                    host=device.connection.host,
+                    port=device.connection.port,
+                    username=device.connection.username,
+                )
+                if device.connection is not None
+                else None
+            ),
         )
 
     # -- I/O --------------------------------------------------------------

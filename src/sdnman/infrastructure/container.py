@@ -7,7 +7,7 @@ cases, keeping framework code free of construction logic.
 
 from __future__ import annotations
 
-from dataclasses import dataclass
+from dataclasses import dataclass, field
 from pathlib import Path
 
 from ..application.services import NetworkStateService
@@ -34,6 +34,7 @@ from .config.applied_config_store import FileAppliedConfigStore
 from .config.yaml_config_repository import YamlConfigRepository
 from .devices.config_renderers import DefaultConfigRendererFactory
 from .devices.factory import DefaultDeviceAdapterFactory
+from .devices.ssh_transport import SshConnectionResolver, SshConnectionSettings
 from .devices.topology_provider import SimpleTopologyProvider
 from .persistence.sqlite_runtime_store import SqliteRuntimeStore
 from .security import verify_password
@@ -47,6 +48,7 @@ class Settings:
     data_dir: Path
     use_mock_devices: bool = True
     poll_interval_seconds: int = 30
+    ssh: SshConnectionSettings = field(default_factory=SshConnectionSettings)
 
     @property
     def db_path(self) -> Path:
@@ -68,7 +70,10 @@ class Container:
             settings.config_dir, backup_dir=settings.config_backup_dir
         )
         self.runtime = SqliteRuntimeStore(settings.db_path)
-        self.adapters = DefaultDeviceAdapterFactory(use_mock=settings.use_mock_devices)
+        self.adapters = DefaultDeviceAdapterFactory(
+            use_mock=settings.use_mock_devices,
+            resolver=SshConnectionResolver(settings.ssh),
+        )
         self.renderers = DefaultConfigRendererFactory()
         self.topology_provider = SimpleTopologyProvider()
         self.applied_config = FileAppliedConfigStore(settings.data_dir)

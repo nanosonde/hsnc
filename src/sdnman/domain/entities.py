@@ -80,6 +80,20 @@ class SwitchPort:
 
 
 @dataclass
+class DeviceConnection:
+    """SSH connection details for managing a device.
+
+    Empty/zero fields fall back to platform defaults at adapter build time. The
+    password is never stored here (or in YAML): it is resolved from the
+    environment so secrets stay out of the declarative inventory.
+    """
+
+    host: str = ""  # "" -> use the device's management IP
+    port: int = 0  # 0 -> platform default (22)
+    username: str = ""  # "" -> platform default (root / admin)
+
+
+@dataclass
 class Device:
     """A managed network device (gateway, switch or access point)."""
 
@@ -98,6 +112,8 @@ class Device:
     vlans: list[Vlan] = field(default_factory=list)
     # access-point-only attributes
     ssids: list[str] = field(default_factory=list)
+    # optional SSH connection override (host/port/user); None -> derive from ip
+    connection: DeviceConnection | None = None
 
 
 @dataclass

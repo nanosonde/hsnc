@@ -100,13 +100,37 @@ YAML files live in `SDNMAN_CONFIG_DIR` (default `./config`, or `/data/config` in
 | ------------------------- | ------- | ---------------------------------------- |
 | `SDNMAN_CONFIG_DIR`        | `config`| Path to YAML config directory            |
 | `SDNMAN_DATA_DIR`          | `data`  | Path to SQLite data directory            |
-| `SDNMAN_USE_MOCK_DEVICES`  | `1`     | `1` mock adapters, `0` real (stub) drivers |
+| `SDNMAN_USE_MOCK_DEVICES`  | `1`     | `1` mock adapters, `0` real SSH drivers  |
 | `SDNMAN_POLL_INTERVAL`     | `30`    | Background poll interval (seconds)       |
 | `SDNMAN_SECRET_KEY`        | dev key | Flask session secret (set in production) |
 
+#### Real-device SSH (when `SDNMAN_USE_MOCK_DEVICES=0`)
+
+Passwords are resolved only from the environment and are never stored in
+`config/devices.yaml`. Install the optional driver with `pip install '.[ssh]'`.
+
+| Variable                          | Default        | Description                                            |
+| --------------------------------- | -------------- | ----------------------------------------------------- |
+| `SDNMAN_SSH_HOST_OVERRIDE`        | _(unset)_      | Force a host/IP for every device (e.g. `127.0.0.1`)   |
+| `SDNMAN_SSH_ACCEPT_UNKNOWN_HOSTS` | `1`            | `1` auto-accept unknown host keys, `0` reject         |
+| `SDNMAN_OPENWRT_SSH_PASSWORD`     | `openwrt`      | Default password for OpenWrt devices                  |
+| `SDNMAN_JETSTREAM_SSH_PASSWORD`   | `admin`        | Default password for JetStream switches               |
+| `SDNMAN_DEVICE_<ID>_PASSWORD`     | _(unset)_      | Per-device password (id upper-cased, non-alnum → `_`) |
+
+Per-device host, port and username come from an optional `connection` block in
+`config/devices.yaml`:
+
+```yaml
+  - id: gateway-1
+    # ...
+    connection:
+      host: ""        # blank -> use the device's management IP
+      port: 22
+      username: root
+```
+
 ## Roadmap
 
-- Implement `OpenWrtSshAdapter` (ubus/uci over SSH) and `JetStreamCliAdapter`.
 - Multi-site support.
 
 ## License

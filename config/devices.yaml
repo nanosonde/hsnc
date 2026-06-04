@@ -9,6 +9,9 @@ devices:
     ip: 192.168.50.254
     firmware: "1.2.0"
     site_id: default
+    connection:
+      username: root
+      port: 22
 
   - id: switch-1
     name: TL-SG2210P
@@ -18,6 +21,9 @@ devices:
     ip: 192.168.50.2
     firmware: "1.0.5"
     site_id: default
+    connection:
+      username: admin
+      port: 22
     vlans:
       - vlan_id: 1
         name: Default
@@ -74,6 +80,9 @@ devices:
     ip: 192.168.50.3
     firmware: "5.0.4"
     site_id: default
+    connection:
+      username: root
+      port: 22
     ssids:
       - HomeNet
       - HomeNet-Guest
@@ -86,6 +95,9 @@ devices:
     ip: 192.168.50.4
     firmware: "23.05.3"
     site_id: default
+    connection:
+      username: root
+      port: 22
     vlans:
       - vlan_id: 1
         name: Default

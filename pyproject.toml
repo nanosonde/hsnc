@@ -27,6 +27,9 @@ dev = [
     "pytest-cov>=4.1",
     "ruff>=0.4",
 ]
+ssh = [
+    "paramiko>=3.4",
+]
 
 [project.scripts]
 sdnman-ctl = "sdnman.presentation.cli:main"

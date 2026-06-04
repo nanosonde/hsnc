@@ -6,6 +6,7 @@ import os
 from pathlib import Path
 
 from ..infrastructure.container import Settings
+from ..infrastructure.devices.ssh_transport import SshConnectionSettings
 
 
 def settings_from_env() -> Settings:
@@ -19,4 +20,5 @@ def settings_from_env() -> Settings:
         data_dir=data_dir,
         use_mock_devices=use_mock,
         poll_interval_seconds=poll_interval,
+        ssh=SshConnectionSettings.from_env(),
     )

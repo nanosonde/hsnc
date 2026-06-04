@@ -48,8 +48,20 @@ by device kind to the SSH adapters:
 
 Within the compose network the adapters reach the mocks at hostnames `mock-openwrt`
 and `mock-jetstream` on port 22; from the host they are on `localhost:2201` / `:2202`.
-Adding SSH host/credential fields to the device model + `config/devices.yaml` is a
-follow-up that lands together with the real adapter implementations.
+
+The adapters need the optional SSH driver (`pip install '.[ssh]'`). Per-device host,
+port and username come from a `connection:` block in `config/devices.yaml`; passwords
+are resolved only from the environment (`SDNMAN_OPENWRT_SSH_PASSWORD`,
+`SDNMAN_JETSTREAM_SSH_PASSWORD`, or `SDNMAN_DEVICE_<ID>_PASSWORD`). To drive the mocks
+from the host:
+
+```sh
+SDNMAN_USE_MOCK_DEVICES=0 \
+SDNMAN_SSH_HOST_OVERRIDE=127.0.0.1 \
+SDNMAN_OPENWRT_SSH_PASSWORD=openwrt \
+SDNMAN_JETSTREAM_SSH_PASSWORD=admin \
+  python -m sdnman   # set connection.port 2201/2202 per device, or override per run
+```
 
 ## Mapping to the sample inventory (`config/devices.yaml`)
 

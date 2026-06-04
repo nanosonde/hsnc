@@ -18,6 +18,8 @@ from sdnman.infrastructure.config.yaml_config_repository import (
     YamlConfigRepository,
 )
 from sdnman.infrastructure.devices.factory import DefaultDeviceAdapterFactory
+from sdnman.infrastructure.devices.jetstream_cli_adapter import JetStreamCliAdapter
+from sdnman.infrastructure.devices.openwrt_ssh_adapter import OpenWrtSshAdapter
 from sdnman.infrastructure.persistence.sqlite_runtime_store import (
     SqliteRuntimeStore,
 )
@@ -181,15 +183,18 @@ def test_backup_roundtrip(config_dir, tmp_path):
     store.close()
 
 
-def test_real_adapter_factory_raises_not_implemented():
+def test_real_adapter_factory_routes_by_kind():
     factory = DefaultDeviceAdapterFactory(use_mock=False)
-    device = Device(
+    switch = Device(
         id="switch-1", name="SW", kind=DeviceKind.SWITCH,
         mac=MacAddress("B0:4E:26:00:00:10"),
     )
-    adapter = factory.for_device(device)
-    with pytest.raises(NotImplementedError):
-        adapter.fetch_status(device)
+    gateway = Device(
+        id="gateway-1", name="GW", kind=DeviceKind.GATEWAY,
+        mac=MacAddress("AC:1F:6B:A0:00:01"),
+    )
+    assert isinstance(factory.for_device(switch), JetStreamCliAdapter)
+    assert isinstance(factory.for_device(gateway), OpenWrtSshAdapter)
 
 
 def test_mock_adapter_factory_returns_data():

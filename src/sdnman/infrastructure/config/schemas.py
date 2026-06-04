@@ -39,6 +39,12 @@ class PortSchema(BaseModel):
     tagged_vlans: list[int] = Field(default_factory=list)
 
 
+class ConnectionSchema(BaseModel):
+    host: str = ""
+    port: int = Field(default=0, ge=0, le=65535)
+    username: str = ""
+
+
 class DeviceSchema(BaseModel):
     id: str
     name: str
@@ -51,6 +57,7 @@ class DeviceSchema(BaseModel):
     ports: list[PortSchema] = Field(default_factory=list)
     vlans: list[VlanSchema] = Field(default_factory=list)
     ssids: list[str] = Field(default_factory=list)
+    connection: ConnectionSchema | None = None
 
 
 class UsersFileSchema(BaseModel):
