@@ -158,6 +158,40 @@ a:hover { text-decoration: underline; }
   background: rgba(255, 255, 255, 0.16); color: #fff;
 }
 
+/* ---------- Read-only mode ---------- */
+.topbar .readonly-control { display: flex; align-items: center; gap: 10px; }
+.topbar .readonly-control .switch-form { display: flex; align-items: center; gap: 8px; margin: 0; }
+.topbar .readonly-control .switch-text { font-size: 13px; color: rgba(255, 255, 255, 0.85); }
+.topbar .readonly-control .ro-pill {
+  font-size: 11px; font-weight: 700; letter-spacing: 0.04em; text-transform: uppercase;
+  padding: 3px 9px; border-radius: 10px; color: #3a2400; background: #f6c453;
+}
+.switch { position: relative; display: inline-flex; cursor: pointer; }
+.switch input { position: absolute; opacity: 0; width: 0; height: 0; }
+.switch .switch-track {
+  width: 38px; height: 20px; border-radius: 999px;
+  background: rgba(255, 255, 255, 0.28); transition: background 0.15s ease; display: block;
+}
+.switch .switch-thumb {
+  position: absolute; top: 2px; left: 2px; width: 16px; height: 16px;
+  border-radius: 50%; background: #fff; transition: transform 0.15s ease;
+  box-shadow: 0 1px 2px rgba(0, 0, 0, 0.3);
+}
+.switch input:checked + .switch-track { background: #e8a200; }
+.switch input:checked + .switch-track .switch-thumb { transform: translateX(18px); }
+.switch input:focus-visible + .switch-track { outline: 2px solid #fff; outline-offset: 2px; }
+
+.app.read-only .topbar { box-shadow: inset 0 -3px 0 #e8a200; }
+
+.readonly-banner {
+  display: flex; align-items: center; gap: 10px;
+  background: #fff4e0; border: 1px solid #f0c987; color: #8a5a00;
+  border-radius: var(--radius-card); padding: 10px 14px; margin-bottom: 16px;
+  font-size: 14px;
+}
+.readonly-banner svg { width: 20px; height: 20px; flex: none; }
+.readonly-banner strong { color: #6e4700; }
+
 .content { padding: 18px; padding-top: 74px; }
 
 /* ---------- Cards ---------- */

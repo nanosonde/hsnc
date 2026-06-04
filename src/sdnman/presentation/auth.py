@@ -57,8 +57,16 @@ def is_admin() -> bool:
     return bool(user and user.get("role") == "admin")
 
 
+def is_read_only() -> bool:
+    """Return whether the global read-only mode is active."""
+    return bool(current_app.config.get("READ_ONLY"))
+
+
+def set_read_only(value: bool) -> None:
+    current_app.config["READ_ONLY"] = bool(value)
+
+
 def register_template_globals(app: Any) -> None:
     app.jinja_env.globals["current_user"] = current_user
     app.jinja_env.globals["is_admin"] = is_admin
-    # silence unused import warning while keeping a single import site
-    _ = current_app
+    app.jinja_env.globals["is_read_only"] = is_read_only

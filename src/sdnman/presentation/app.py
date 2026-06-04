@@ -7,7 +7,7 @@ import os
 from pathlib import Path
 
 from apscheduler.schedulers.background import BackgroundScheduler
-from flask import Flask, render_template
+from flask import Flask, flash, redirect, render_template, request, url_for
 
 from ..infrastructure.container import Container, Settings
 from .auth import register_template_globals
@@ -37,8 +37,28 @@ def create_app(settings: Settings | None = None) -> Flask:
     app.config["SECRET_KEY"] = os.environ.get("SDNMAN_SECRET_KEY", "dev-insecure-change-me")
     app.config["CONTAINER"] = Container(settings)
     app.config["SETTINGS"] = settings
+    app.config["READ_ONLY"] = False
 
     register_template_globals(app)
+
+    # Endpoints that stay reachable while the global read-only mode is active.
+    _READ_ONLY_ALLOWED = {
+        "auth.login",
+        "auth.logout",
+        "dashboard.toggle_read_only",
+        "static",
+    }
+
+    @app.before_request
+    def _enforce_read_only():  # type: ignore[no-untyped-def]
+        if request.method in ("GET", "HEAD", "OPTIONS"):
+            return None
+        if not app.config.get("READ_ONLY"):
+            return None
+        if request.endpoint in _READ_ONLY_ALLOWED:
+            return None
+        flash("Read-only mode is active \u2014 write operations are disabled.", "error")
+        return redirect(request.referrer or url_for("dashboard.index"))
 
     @app.context_processor
     def inject_site_name() -> dict[str, str]:
