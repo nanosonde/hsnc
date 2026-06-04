@@ -105,4 +105,21 @@
   </form>
 </div>
 {% endif %}
+
+{# ---------------- No editable sections ---------------- #}
+{% set is_switch = detail.row.kind == 'switch' %}
+{% set is_ap = detail.row.kind == 'access_point' %}
+{% if not is_switch and not is_ap and not detail.ports %}
+<div class="card card-pad empty-state" style="margin-top:16px">
+  <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="9"/><path d="M12 8h.01M11 12h1v4h1"/></svg>
+  <div>
+    <p class="empty-title">No editable settings for this device type</p>
+    <p class="muted" style="margin:4px 0 0">
+      {{ detail.row.kind.replace('_',' ').capitalize() }} devices don't expose
+      VLAN, port, or SSID configuration here. You can still
+      <a href="{{ url_for('devices.detail', device_id=detail.row.id) }}">view its details</a>.
+    </p>
+  </div>
+</div>
+{% endif %}
 {% endblock %}
