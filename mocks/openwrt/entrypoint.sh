@@ -31,6 +31,9 @@ else
     echo "${SSH_USER}:${SSH_PASSWORD}" | chpasswd
 fi
 
+# The fake uci writes state; make sure the login user owns the state dir.
+chown -R "$SSH_USER" "$STATE_DIR"
+
 # Optional public-key auth.
 if [ -n "${MOCK_SSH_PUBKEY:-}" ]; then
     home_dir="$(getent passwd "$SSH_USER" | cut -d: -f6)"

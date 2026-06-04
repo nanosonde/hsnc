@@ -16,7 +16,7 @@ echo "--- building & starting mocks ---"
 "${COMPOSE[@]}" up -d --build
 
 echo "--- waiting for sshd ---"
-python3 - "$@" <<'PY'
+python3 - <<'PY'
 import socket
 import sys
 import time

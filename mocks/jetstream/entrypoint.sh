@@ -27,6 +27,9 @@ else
 fi
 echo "${SSH_USER}:${SSH_PASSWORD}" | chpasswd
 
+# The CLI runs as $SSH_USER and must be able to persist state.
+chown -R "$SSH_USER" "$STATE_DIR"
+
 if [ -n "${MOCK_SSH_PUBKEY:-}" ]; then
     home_dir="$(getent passwd "$SSH_USER" | cut -d: -f6)"
     mkdir -p "$home_dir/.ssh"
