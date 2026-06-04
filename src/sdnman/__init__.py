@@ -1,4 +1,4 @@
-"""openwrt-manager-ui: self-hosted network controller UI.
+"""sdn-manager: self-hosted network controller UI.
 
 Clean Architecture layout:
     domain          -> enterprise entities, value objects, abstract interfaces (no deps)

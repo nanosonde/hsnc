@@ -4,14 +4,14 @@ from __future__ import annotations
 
 import pytest
 
-from omui_clone.domain.entities import Client, Device, Site, User
-from omui_clone.domain.enums import (
+from sdnman.domain.entities import Client, Device, Site, User
+from sdnman.domain.enums import (
     ConnectionType,
     DeviceKind,
     DeviceStatus,
     Role,
 )
-from omui_clone.domain.value_objects import (
+from sdnman.domain.value_objects import (
     DataVolume,
     IpAddress,
     MacAddress,

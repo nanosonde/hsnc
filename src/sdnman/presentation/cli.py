@@ -12,7 +12,7 @@ from .app import create_app
 
 @click.group()
 def main() -> None:
-    """openwrt-manager-ui control commands."""
+    """sdn-manager control commands."""
 
 
 @main.command()

@@ -1,4 +1,4 @@
-# openwrt-manager-ui
+# sdn-manager
 
 An open-source, self-hosted network controller UI for **OpenWrt-based gateways &
 access points** and **JetStream managed switches** (with VLANs).
@@ -48,7 +48,7 @@ Data (YAML config + SQLite DB) persists in the `controller-data` Docker volume.
 ```bash
 python3 -m venv .venv && . .venv/bin/activate
 pip install -e ".[dev]"
-omui-ctl serve --debug          # http://localhost:8080
+sdnman-ctl serve --debug          # http://localhost:8080
 ```
 
 ## Tests & lint
@@ -80,13 +80,13 @@ From the UI (admin only): **Backup → Download / Import**.
 From the CLI:
 
 ```bash
-omui-ctl backup export ./backup.zip
-omui-ctl backup import ./backup.zip
+sdnman-ctl backup export ./backup.zip
+sdnman-ctl backup import ./backup.zip
 ```
 
 ## Configuration
 
-YAML files live in `OMUI_CONFIG_DIR` (default `./config`, or `/data/config` in Docker):
+YAML files live in `SDNMAN_CONFIG_DIR` (default `./config`, or `/data/config` in Docker):
 
 | File           | Purpose                                   |
 | -------------- | ----------------------------------------- |
@@ -98,11 +98,11 @@ YAML files live in `OMUI_CONFIG_DIR` (default `./config`, or `/data/config` in D
 
 | Variable                  | Default | Description                              |
 | ------------------------- | ------- | ---------------------------------------- |
-| `OMUI_CONFIG_DIR`        | `config`| Path to YAML config directory            |
-| `OMUI_DATA_DIR`          | `data`  | Path to SQLite data directory            |
-| `OMUI_USE_MOCK_DEVICES`  | `1`     | `1` mock adapters, `0` real (stub) drivers |
-| `OMUI_POLL_INTERVAL`     | `30`    | Background poll interval (seconds)       |
-| `OMUI_SECRET_KEY`        | dev key | Flask session secret (set in production) |
+| `SDNMAN_CONFIG_DIR`        | `config`| Path to YAML config directory            |
+| `SDNMAN_DATA_DIR`          | `data`  | Path to SQLite data directory            |
+| `SDNMAN_USE_MOCK_DEVICES`  | `1`     | `1` mock adapters, `0` real (stub) drivers |
+| `SDNMAN_POLL_INTERVAL`     | `30`    | Background poll interval (seconds)       |
+| `SDNMAN_SECRET_KEY`        | dev key | Flask session secret (set in production) |
 
 ## Roadmap
 

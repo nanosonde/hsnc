@@ -26,8 +26,8 @@
   --accent-hover: #00956a;
   --accent-tint: #e6f6ef;
   --header-bg: #0a5a5a;
-  --omui-teal: #00a870;
-  --omui-blue: #2f8de4;
+  --sdnman-teal: #00a870;
+  --sdnman-blue: #2f8de4;
 
   --bg: #fafafa;
   --panel: #ffffff;
@@ -287,7 +287,7 @@ table.data tbody tr:hover { background: #f7f9fb; }
 .topo-card { fill: #fff; stroke: var(--border); }
 .topo-label { font-size: 13px; font-weight: 600; fill: var(--text); }
 .topo-sub { font-size: 11px; fill: var(--muted); }
-.topo-badge { fill: var(--omui-blue); }
+.topo-badge { fill: var(--sdnman-blue); }
 .topo-badge-text { fill: #fff; font-size: 11px; }
 .topo-link { stroke: #c7d0db; stroke-width: 2; fill: none; }
 
@@ -337,13 +337,13 @@ table.data tbody tr:hover { background: #f7f9fb; }
 
 .tag { font-size: 11px; padding: 2px 9px; border-radius: 10px; font-weight: 600; }
 .tag-added { background: #ecf8f3; color: var(--green); }
-.tag-modified { background: #eef4fb; color: var(--omui-blue); }
+.tag-modified { background: #eef4fb; color: var(--sdnman-blue); }
 .tag-removed { background: #fdecef; color: var(--danger); }
 .tag-warn { background: #fff8ec; color: var(--status-orange); }
 
 .change-group {
   margin-top: 16px; border: 1px solid var(--border); border-radius: 10px;
-  overflow: hidden; --sect-accent: var(--omui-blue); --sect-tint: #eef4fb;
+  overflow: hidden; --sect-accent: var(--sdnman-blue); --sect-tint: #eef4fb;
 }
 .change-group-title {
   display: flex; align-items: center; gap: 8px;
@@ -374,7 +374,7 @@ table.data tbody tr:hover { background: #f7f9fb; }
 
 /* Section accents */
 .sect-general  { --sect-accent: #5b6b7b; --sect-tint: #eef1f4; }
-.sect-vlans    { --sect-accent: var(--omui-blue); --sect-tint: #eef4fb; }
+.sect-vlans    { --sect-accent: var(--sdnman-blue); --sect-tint: #eef4fb; }
 .sect-ports    { --sect-accent: #8a4fd0; --sect-tint: #f3edfb; }
 .sect-wireless { --sect-accent: #d9822b; --sect-tint: #fcf2e6; }
 .sect-uci      { --sect-accent: #2f7d6b; --sect-tint: #e9f5f1; }
@@ -384,7 +384,7 @@ table.data tbody tr:hover { background: #f7f9fb; }
   padding: 10px 12px; margin-bottom: 8px; background: #fcfdfe;
 }
 .change-added { border-left-color: var(--green); }
-.change-modified { border-left-color: var(--omui-blue); }
+.change-modified { border-left-color: var(--sdnman-blue); }
 .change-removed { border-left-color: var(--danger); }
 
 .change-field {
@@ -396,7 +396,7 @@ table.data tbody tr:hover { background: #f7f9fb; }
   font-weight: 700; text-transform: uppercase; letter-spacing: .3px;
 }
 .chg-added { background: #ecf8f3; color: var(--green); }
-.chg-modified { background: #eef4fb; color: var(--omui-blue); }
+.chg-modified { background: #eef4fb; color: var(--sdnman-blue); }
 .chg-removed { background: #fdecef; color: var(--danger); }
 
 .change-transition { display: flex; align-items: stretch; gap: 10px; flex-wrap: wrap; }

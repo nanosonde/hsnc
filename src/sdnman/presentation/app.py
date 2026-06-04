@@ -34,7 +34,7 @@ def create_app(settings: Settings | None = None) -> Flask:
         template_folder=str(_TEMPLATES),
         static_folder=str(_STATIC),
     )
-    app.config["SECRET_KEY"] = os.environ.get("OMUI_SECRET_KEY", "dev-insecure-change-me")
+    app.config["SECRET_KEY"] = os.environ.get("SDNMAN_SECRET_KEY", "dev-insecure-change-me")
     app.config["CONTAINER"] = Container(settings)
     app.config["SETTINGS"] = settings
 

@@ -1,1 +1,1 @@
-"""Test suite for openwrt-manager-ui."""
+"""Test suite for sdn-manager."""

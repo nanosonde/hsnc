@@ -19,10 +19,10 @@ FROM python:3.12-slim AS runtime
 
 ENV PYTHONUNBUFFERED=1 \
     PYTHONDONTWRITEBYTECODE=1 \
-    OMUI_CONFIG_DIR=/data/config \
-    OMUI_DATA_DIR=/data \
-    OMUI_USE_MOCK_DEVICES=1 \
-    OMUI_POLL_INTERVAL=30
+    SDNMAN_CONFIG_DIR=/data/config \
+    SDNMAN_DATA_DIR=/data \
+    SDNMAN_USE_MOCK_DEVICES=1 \
+    SDNMAN_POLL_INTERVAL=30
 
 # Non-root user
 RUN useradd --create-home --uid 10001 appuser
@@ -44,4 +44,4 @@ EXPOSE 8080
 
 ENTRYPOINT ["/usr/local/bin/entrypoint.sh"]
 CMD ["gunicorn", "--bind", "0.0.0.0:8080", "--workers", "1", "--threads", "4", \
-     "--timeout", "60", "omui_clone.presentation.wsgi:app"]
+     "--timeout", "60", "sdnman.presentation.wsgi:app"]

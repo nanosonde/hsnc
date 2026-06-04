@@ -5,7 +5,7 @@ from __future__ import annotations
 from collections.abc import Iterable
 from datetime import datetime
 
-from omui_clone.domain.entities import (
+from sdnman.domain.entities import (
     ApplyEvent,
     AssociationFailure,
     Client,
@@ -16,7 +16,7 @@ from omui_clone.domain.entities import (
     TopologyNode,
     User,
 )
-from omui_clone.domain.interfaces import (
+from sdnman.domain.interfaces import (
     AppliedConfigStore,
     ApplyHistoryStore,
     ConfigRepository,

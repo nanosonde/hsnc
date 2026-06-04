@@ -1,15 +1,15 @@
 services:
   controller:
     build: .
-    image: openwrt-manager-ui:latest
-    container_name: openwrt-manager-ui
+    image: sdn-manager:latest
+    container_name: sdn-manager
     ports:
       - "8080:8080"
     environment:
       # Change this to a strong random value in production.
-      OMUI_SECRET_KEY: "change-me-in-production"
-      OMUI_USE_MOCK_DEVICES: "1"
-      OMUI_POLL_INTERVAL: "30"
+      SDNMAN_SECRET_KEY: "change-me-in-production"
+      SDNMAN_USE_MOCK_DEVICES: "1"
+      SDNMAN_POLL_INTERVAL: "30"
     volumes:
       - controller-data:/data
     restart: unless-stopped

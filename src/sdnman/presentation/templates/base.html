@@ -3,7 +3,7 @@
 <head>
   <meta charset="utf-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1" />
-  <title>{% block title %}openwrt-manager-ui{% endblock %}</title>
+  <title>{% block title %}sdn-manager{% endblock %}</title>
   <link rel="stylesheet" href="{{ url_for('static', filename='css/app.css') }}" />
   <script src="{{ url_for('static', filename='js/htmx.min.js') }}" defer></script>
 </head>
@@ -11,12 +11,12 @@
 {% set user = current_user() %}
 {% if user %}
 <div class="app" id="app-shell">
-  <script>try{if(localStorage.getItem("omui.nav.collapsed")==="1")document.getElementById("app-shell").classList.add("nav-collapsed");}catch(e){}</script>
+  <script>try{if(localStorage.getItem("sdnman.nav.collapsed")==="1")document.getElementById("app-shell").classList.add("nav-collapsed");}catch(e){}</script>
   <header class="topbar">
     <button type="button" class="nav-toggle" id="nav-toggle" title="Collapse sidebar" aria-label="Toggle sidebar">
       <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><path d="M4 6h16M4 12h10M4 18h16"/><path d="M19 9l3 3-3 3"/></svg>
     </button>
-    <div class="brand"><span class="logo">O</span>&nbsp;openwrt-manager-ui</div>
+    <div class="brand"><span class="logo">S</span>&nbsp;sdn-manager</div>
     <div class="spacer"></div>
     <div class="site-select">
       <span>Site:</span>
