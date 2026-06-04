@@ -10,7 +10,7 @@
 <body>
 {% set user = current_user() %}
 {% if user %}
-<div class="app{% if is_read_only() %} read-only{% endif %}" id="app-shell">
+<div class="app{% if not is_read_only() %} write-enabled{% endif %}" id="app-shell">
   <script>try{if(localStorage.getItem("sdnman.nav.collapsed")==="1")document.getElementById("app-shell").classList.add("nav-collapsed");}catch(e){}</script>
   <header class="topbar">
     <div class="brand">
@@ -19,10 +19,10 @@
     </div>
     <div class="spacer"></div>
     <div class="readonly-control" title="Global read-only mode blocks all changes to devices">
-      {% if is_read_only() %}<span class="ro-pill">Read-only</span>{% endif %}
+      {% if not is_read_only() %}<span class="ro-pill">Write enabled</span>{% endif %}
       {% if is_admin() %}
       <form method="post" action="{{ url_for('dashboard.toggle_read_only') }}" class="switch-form">
-        <span class="switch-text">Read-only</span>
+        <span class="switch-text">Read-only mode</span>
         <label class="switch">
           <input type="checkbox" name="enabled" onchange="this.form.submit()" {% if is_read_only() %}checked{% endif %} aria-label="Toggle read-only mode">
           <span class="switch-track"><span class="switch-thumb"></span></span>
@@ -82,10 +82,10 @@
 
   <div class="main">
     <main class="content">
-      {% if is_read_only() %}
+      {% if not is_read_only() %}
       <div class="readonly-banner" role="status">
-        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><rect x="5" y="11" width="14" height="9" rx="2"/><path d="M8 11V7a4 4 0 0 1 8 0v4"/></svg>
-        <span><strong>Read-only mode is active.</strong> All changes to devices are disabled.</span>
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><rect x="5" y="11" width="14" height="9" rx="2"/><path d="M8 11V7a4 4 0 0 1 7.5-1.9"/></svg>
+        <span><strong>Write mode is active.</strong> Changes to devices are enabled. Turn on read-only to lock the system.</span>
       </div>
       {% endif %}
       {% with messages = get_flashed_messages(with_categories=true) %}

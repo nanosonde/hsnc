@@ -30,7 +30,7 @@
     <form method="post" action="{{ url_for('config.apply') }}"
           onsubmit="return confirm('Apply configuration to all devices?');">
       <button class="btn btn-primary" type="submit"
-              {% if not plan.has_actionable %}disabled title="No applicable devices"{% endif %}>
+              {% if is_read_only() %}disabled title="Read-only mode is active"{% elif not plan.has_actionable %}disabled title="No applicable devices"{% endif %}>
         Apply All
       </button>
     </form>
@@ -70,7 +70,7 @@
       <form method="post" action="{{ url_for('config.apply_device', device_id=dev.device_id) }}"
             onsubmit="return confirm('Apply configuration to {{ dev.device_name }}?');">
         <button class="btn btn-primary" type="submit"
-                {% if item and not item.supported %}disabled title="No driver available"{% endif %}>
+                {% if is_read_only() %}disabled title="Read-only mode is active"{% elif item and not item.supported %}disabled title="No driver available"{% endif %}>
           Apply
         </button>
       </form>

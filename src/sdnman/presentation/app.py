@@ -37,7 +37,7 @@ def create_app(settings: Settings | None = None) -> Flask:
     app.config["SECRET_KEY"] = os.environ.get("SDNMAN_SECRET_KEY", "dev-insecure-change-me")
     app.config["CONTAINER"] = Container(settings)
     app.config["SETTINGS"] = settings
-    app.config["READ_ONLY"] = False
+    app.config["READ_ONLY"] = True
 
     register_template_globals(app)
 
