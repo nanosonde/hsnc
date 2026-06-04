@@ -5,6 +5,7 @@ Entities are plain dataclasses free of any framework or persistence concern.
 
 from __future__ import annotations
 
+import ipaddress
 from dataclasses import dataclass, field
 from datetime import datetime
 
@@ -53,6 +54,15 @@ class Vlan:
     def __post_init__(self) -> None:
         if not 1 <= self.vlan_id <= 4094:
             raise ValueError("VLAN id must be between 1 and 4094")
+        if self.subnet:
+            if "/" not in self.subnet:
+                raise ValueError(
+                    f"Subnet must be in CIDR notation (e.g. 192.168.1.0/24): {self.subnet!r}"
+                )
+            try:
+                ipaddress.ip_network(self.subnet, strict=False)
+            except ValueError as exc:
+                raise ValueError(f"Invalid subnet {self.subnet!r}: {exc}") from exc
 
 
 @dataclass

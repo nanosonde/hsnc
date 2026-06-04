@@ -51,6 +51,26 @@ def test_save_vlan_rejects_invalid_id(repo):
         SaveVlan(repo, repo).execute("switch-1", vlan_id=5000, name="Bad")
 
 
+def test_save_vlan_accepts_valid_cidr_subnet(repo):
+    SaveVlan(repo, repo).execute(
+        "switch-1", vlan_id=42, name="Lab", subnet="192.168.42.0/24"
+    )
+    data = _devices_yaml(repo)
+    switch = next(d for d in data["devices"] if d["id"] == "switch-1")
+    assert any(
+        v["vlan_id"] == 42 and v["subnet"] == "192.168.42.0/24" for v in switch["vlans"]
+    )
+
+
+@pytest.mark.parametrize(
+    "subnet",
+    ["192.168.1.0", "192.168.1.0/33", "10.0.0.0/-1", "not-a-subnet", "300.1.1.0/24"],
+)
+def test_save_vlan_rejects_invalid_subnet(repo, subnet):
+    with pytest.raises(ConfigEditError):
+        SaveVlan(repo, repo).execute("switch-1", vlan_id=43, name="Bad", subnet=subnet)
+
+
 def test_delete_vlan_blocked_when_used_as_pvid(repo):
     switch = repo.get_device("switch-1")
     pvid = switch.ports[0].pvid
