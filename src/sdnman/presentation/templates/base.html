@@ -13,15 +13,11 @@
 <div class="app" id="app-shell">
   <script>try{if(localStorage.getItem("sdnman.nav.collapsed")==="1")document.getElementById("app-shell").classList.add("nav-collapsed");}catch(e){}</script>
   <header class="topbar">
-    <button type="button" class="nav-toggle" id="nav-toggle" title="Collapse sidebar" aria-label="Toggle sidebar">
-      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><path d="M4 6h16M4 12h10M4 18h16"/><path d="M19 9l3 3-3 3"/></svg>
-    </button>
-    <div class="brand"><span class="logo">S</span>&nbsp;sdn-manager</div>
-    <div class="spacer"></div>
-    <div class="site-select">
-      <span>Site:</span>
+    <div class="brand">
+      <svg class="globe" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="9"/><path d="M3 12h18"/><path d="M12 3c2.4 2.6 2.4 15.4 0 18M12 3c-2.4 2.6-2.4 15.4 0 18"/></svg>
       <span class="site-name">{{ site_name }}</span>
     </div>
+    <div class="spacer"></div>
     <div class="user">
       <span>{{ user.display_name }}</span>
       <span class="badge-role">{{ user.role }}</span>
@@ -32,6 +28,11 @@
   </header>
 
   <nav class="sidebar">
+    <div class="sidebar-head">
+      <button type="button" class="nav-toggle" id="nav-toggle" title="Collapse sidebar" aria-label="Toggle sidebar">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><path d="M4 6h16M4 12h10M4 18h16"/><path d="M19 9l3 3-3 3"/></svg>
+      </button>
+    </div>
     <a class="nav-item {% if active=='dashboard' %}active{% endif %}" href="{{ url_for('dashboard.index') }}" title="Dashboard">
       <svg viewBox="0 0 20 20" fill="none"><path d="M4.81451 15.8521C3.48744 14.525 2.66663 12.6917 2.66663 10.6666C2.66663 6.61655 5.94986 3.33331 9.99996 3.33331C14.0501 3.33331 17.3333 6.61655 17.3333 10.6666C17.3333 12.6917 16.5125 14.525 15.1854 15.8521" stroke="currentColor" stroke-width="1.2" stroke-linecap="round" stroke-linejoin="round"/><path d="M6.70021 13.9665C5.85571 13.122 5.33337 11.9553 5.33337 10.6667C5.33337 8.08933 7.42271 6 10 6" stroke="currentColor" stroke-width="1.2" stroke-linecap="round"/><path d="M10 10.6667V8" stroke="currentColor" stroke-width="1.2" stroke-linecap="round" stroke-linejoin="round"/></svg>
       <span class="nav-label">Dashboard</span>
