@@ -77,6 +77,7 @@ a:hover { text-decoration: underline; }
 .topbar .site-select {
   display: flex; align-items: center; gap: 8px; color: var(--muted);
 }
+.topbar .site-select .site-name { color: var(--text); font-weight: 600; }
 .topbar select {
   border: 1px solid var(--border); border-radius: 6px;
   padding: 5px 8px; background: #fff; color: var(--text);
@@ -227,11 +228,128 @@ table.data tbody tr:hover { background: #f7f9fb; }
 .htmx-indicator { opacity: 0; transition: opacity .2s; }
 .htmx-request .htmx-indicator { opacity: 1; }
 
-/* ---------- Command diff ---------- */
-.cmd-diff { margin: 0; padding: 12px 14px; background: #0d1117; border-radius: 8px;
-  overflow-x: auto; font-size: 12.5px; line-height: 1.5; }
+/* ---------- Command list ---------- */
+.cmd-diff { margin: 8px 0 0; padding: 12px 14px; background: #f6f8fa;
+  border: 1px solid var(--border); border-radius: 8px;
+  overflow-x: auto; font-size: 13px; line-height: 1.6; }
 .cmd-diff code { font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace; }
 .cmd-diff span { display: block; white-space: pre; }
-.cmd-ctx { color: #adbac7; }
-.cmd-add { color: #7ee787; background: rgba(46,160,67,.15); }
-.cmd-del { color: #ff7b72; background: rgba(248,81,73,.15); }
+.cmd-ctx { color: var(--text); }
+
+/* ---------- Pending changes (before/after) ---------- */
+.pending-head {
+  display: flex; align-items: center; justify-content: space-between;
+  gap: 12px; flex-wrap: wrap; margin-bottom: 4px;
+}
+.pending-head-main { display: flex; align-items: center; gap: 10px; flex-wrap: wrap; }
+.pending-head-actions { display: flex; align-items: center; gap: 8px; }
+.pending-name { font-weight: 600; font-size: 15px; }
+
+.tag { font-size: 11px; padding: 2px 9px; border-radius: 10px; font-weight: 600; }
+.tag-added { background: #ecf8f3; color: var(--green); }
+.tag-modified { background: #eef4fb; color: var(--omada-blue); }
+.tag-removed { background: #fdecef; color: var(--danger); }
+.tag-warn { background: #fff8ec; color: var(--status-orange); }
+
+.change-group {
+  margin-top: 16px; border: 1px solid var(--border); border-radius: 10px;
+  overflow: hidden; --sect-accent: var(--omada-blue); --sect-tint: #eef4fb;
+}
+.change-group-title {
+  display: flex; align-items: center; gap: 8px;
+  font-size: 12px; text-transform: uppercase; letter-spacing: .5px;
+  color: var(--text); font-weight: 700; margin: 0;
+  padding: 8px 12px; background: var(--sect-tint);
+  border-left: 4px solid var(--sect-accent);
+}
+.change-group-title .sect-dot {
+  width: 8px; height: 8px; border-radius: 50%;
+  background: var(--sect-accent); flex: none;
+}
+.change-group-title .sect-name { color: var(--sect-accent); }
+.change-group-title .sect-platform {
+  text-transform: none; letter-spacing: 0; font-weight: 500;
+  color: var(--muted); font-size: 11px;
+}
+.change-group-title .sect-count {
+  margin-left: auto; min-width: 20px; text-align: center;
+  background: var(--sect-accent); color: #fff;
+  font-size: 11px; font-weight: 700; padding: 1px 7px; border-radius: 10px;
+  text-transform: none; letter-spacing: 0;
+}
+.change-group > .change,
+.change-group > .uci-changes { margin: 10px 12px; }
+.change-group > .change:first-of-type { margin-top: 12px; }
+.change-group > .change:last-of-type { margin-bottom: 12px; }
+
+/* Section accents */
+.sect-general  { --sect-accent: #5b6b7b; --sect-tint: #eef1f4; }
+.sect-vlans    { --sect-accent: var(--omada-blue); --sect-tint: #eef4fb; }
+.sect-ports    { --sect-accent: #8a4fd0; --sect-tint: #f3edfb; }
+.sect-wireless { --sect-accent: #d9822b; --sect-tint: #fcf2e6; }
+.sect-uci      { --sect-accent: #2f7d6b; --sect-tint: #e9f5f1; }
+
+.change {
+  border: 1px solid var(--border); border-left-width: 3px; border-radius: 8px;
+  padding: 10px 12px; margin-bottom: 8px; background: #fcfdfe;
+}
+.change-added { border-left-color: var(--green); }
+.change-modified { border-left-color: var(--omada-blue); }
+.change-removed { border-left-color: var(--danger); }
+
+.change-field {
+  font-weight: 600; font-size: 13px; margin-bottom: 8px;
+  display: flex; align-items: center; gap: 8px;
+}
+.chg-tag {
+  font-size: 10px; padding: 1px 7px; border-radius: 10px;
+  font-weight: 700; text-transform: uppercase; letter-spacing: .3px;
+}
+.chg-added { background: #ecf8f3; color: var(--green); }
+.chg-modified { background: #eef4fb; color: var(--omada-blue); }
+.chg-removed { background: #fdecef; color: var(--danger); }
+
+.change-transition { display: flex; align-items: stretch; gap: 10px; flex-wrap: wrap; }
+.state {
+  flex: 1; min-width: 200px; border: 1px solid; border-radius: 6px; padding: 8px 10px;
+}
+.state-label {
+  display: block; font-size: 10px; text-transform: uppercase; letter-spacing: .4px;
+  font-weight: 700; margin-bottom: 4px;
+}
+.state .val {
+  font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
+  font-size: 13px; word-break: break-word; white-space: pre-wrap;
+}
+.state .val .none { color: var(--muted); font-style: italic; font-family: inherit; }
+.state-current { background: #fdf3f5; border-color: #f3d6dd; }
+.state-current .state-label { color: var(--danger); }
+.state-future { background: #eef9f3; border-color: #cfe9dc; }
+.state-future .state-label { color: var(--green); }
+.change-added .state-current { background: #f6f8fa; border-color: var(--border); }
+.arrow { display: flex; align-items: center; color: var(--muted); font-size: 18px; padding: 0 2px; }
+
+/* ---------- UCI changes (LuCI style) ---------- */
+.uci-changes {
+  background: #f6f8fa; border: 1px solid var(--border); border-radius: 8px; padding: 10px 12px;
+  font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
+  font-size: 13px; line-height: 1.7; overflow-x: auto;
+}
+.uci-row { display: flex; gap: 8px; align-items: baseline; white-space: nowrap; }
+.uci-path { color: #0a5dc2; }
+.uci-vals { color: var(--text); }
+.uci-old { color: var(--danger); text-decoration: line-through; }
+.uci-new { color: #1a7f4b; }
+.uci-to { color: var(--muted); margin: 0 2px; }
+.uci-del-note { color: var(--muted); font-style: italic; margin-left: 4px; }
+
+.cmd-details { margin-top: 14px; }
+.cmd-details > summary {
+  cursor: pointer; color: var(--muted); font-size: 13px; user-select: none;
+}
+.cmd-details > summary:hover { color: var(--text); }
+
+@media (max-width: 640px) {
+  .change-transition { flex-direction: column; }
+  .arrow { transform: rotate(90deg); justify-content: center; }
+}

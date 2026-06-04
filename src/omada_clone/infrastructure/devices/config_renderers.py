@@ -42,6 +42,36 @@ class UciConfigRenderer(DeviceConfigRenderer):
         lines.append("uci commit")
         return lines
 
+    def settings(self, device: Device) -> dict[str, str]:
+        """Flatten the config into concrete UCI option paths (LuCI-style).
+
+        Bridge-VLAN sections are keyed by their VLAN id (``[10]``) rather than an
+        anonymous index so the diff stays stable and readable.
+        """
+        s: dict[str, str] = {"system.@system[0].hostname": device.name}
+        if device.ip:
+            s["network.lan.ipaddr"] = str(device.ip)
+
+        ports = sorted(device.ports, key=lambda p: p.number)
+        for vlan in sorted(device.vlans, key=lambda v: v.vlan_id):
+            base = f"network.@bridge-vlan[{vlan.vlan_id}]"
+            members: list[str] = []
+            for port in ports:
+                if not port.enabled:
+                    continue
+                if vlan.vlan_id in port.tagged_vlans:
+                    members.append(f"lan{port.number}:t")
+                elif port.pvid == vlan.vlan_id:
+                    members.append(f"lan{port.number}:u*")
+            s[f"{base}.device"] = "br-lan"
+            s[f"{base}.vlan"] = str(vlan.vlan_id)
+            s[f"{base}.ports"] = " ".join(members)
+
+        for idx, ssid in enumerate(device.ssids):
+            s[f"wireless.@wifi-iface[{idx}].ssid"] = ssid
+            s[f"wireless.@wifi-iface[{idx}].network"] = "lan"
+        return s
+
     @staticmethod
     def _render_switch(device: Device) -> list[str]:
         lines: list[str] = []

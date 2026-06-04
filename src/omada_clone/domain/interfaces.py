@@ -87,6 +87,15 @@ class DeviceConfigRenderer(ABC):
     def render(self, device: Device) -> list[str]:
         """Return the ordered commands that realise ``device``'s configuration."""
 
+    def settings(self, device: Device) -> dict[str, str]:
+        """Return the device's config as flattened native ``path -> value`` pairs.
+
+        For OpenWrt this mirrors LuCI's "Unsaved Changes" view, keyed by concrete
+        UCI option paths (e.g. ``network.lan.ipaddr``). Platforms without a
+        meaningful option-path representation return an empty mapping (default).
+        """
+        return {}
+
 
 class DeviceConfigRendererFactory(ABC):
     """Selects the appropriate :class:`DeviceConfigRenderer` for a device."""

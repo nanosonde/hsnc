@@ -40,6 +40,11 @@ def create_app(settings: Settings | None = None) -> Flask:
 
     register_template_globals(app)
 
+    @app.context_processor
+    def inject_site_name() -> dict[str, str]:
+        container: Container = app.config["CONTAINER"]
+        return {"site_name": container.config.get_site().name}
+
     app.register_blueprint(auth_bp.bp)
     app.register_blueprint(dashboard_bp.bp)
     app.register_blueprint(devices_bp.bp)

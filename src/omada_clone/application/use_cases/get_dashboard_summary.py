@@ -63,7 +63,6 @@ class GetDashboardSummary:
             admin_count=admins,
             device_count=len(devices),
             alert_count=failure_total,
-            cloud_status="Connected",
             association_failures=failure_rows,
             association_failure_total=failure_total,
         )

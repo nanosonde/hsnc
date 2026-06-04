@@ -9,6 +9,8 @@ ever applied or there is nothing to revert).
 
 from __future__ import annotations
 
+from collections.abc import Iterable
+
 from ...domain.interfaces import AppliedConfigStore, ConfigRepository, ConfigWriter
 
 
@@ -25,13 +27,16 @@ class RevertPendingChanges:
         self._applied = applied
         self._writer = writer
 
-    def execute(self) -> int:
+    def execute(self, device_ids: Iterable[str] | None = None) -> int:
         applied = self._applied.load()
         if not applied:
             return 0
+        wanted = set(device_ids) if device_ids is not None else None
         desired = {d.id: d for d in self._config.list_devices()}
         reverted = 0
         for device in applied:
+            if wanted is not None and device.id not in wanted:
+                continue
             if desired.get(device.id) != device:
                 self._writer.save_device(device)
                 reverted += 1

@@ -176,6 +176,18 @@ def revert():
     return redirect(url_for("config.pending"))
 
 
+@bp.route("/config/revert/<device_id>", methods=["POST"])
+@role_required("admin")
+def revert_device(device_id: str):
+    container = _container()
+    reverted = container.revert_changes.execute(device_ids=[device_id])
+    if reverted:
+        flash("Device reverted to the last applied configuration.", "success")
+    else:
+        flash("Nothing to revert.", "success")
+    return redirect(url_for("config.pending"))
+
+
 @bp.route("/config/history")
 @login_required
 def history():

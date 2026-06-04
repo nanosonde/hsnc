@@ -33,7 +33,6 @@ class DashboardSummary:
     admin_count: int
     device_count: int
     alert_count: int
-    cloud_status: str
     association_failures: list[AssociationFailureRow]
     association_failure_total: int
 
@@ -143,11 +142,20 @@ class AuthenticatedUser:
 
 @dataclass(frozen=True)
 class ChangeRow:
-    """A single field-level change between applied and desired config."""
+    """A single field-level change between applied and desired config.
+
+    ``group`` buckets related options into sections (e.g. ``"VLANs"``,
+    ``"Ports"``) so the UI can present granular, per-option before/after rows
+    instead of one packed string. ``change`` classifies the transition so the
+    presentation can colour it: an option newly introduced (``"added"``),
+    removed (``"removed"``) or altered in place (``"modified"``).
+    """
 
     field: str
     old: str
     new: str
+    group: str = "General"
+    change: str = "modified"  # "added" | "removed" | "modified"
 
 
 @dataclass(frozen=True)
@@ -163,6 +171,20 @@ class CommandLine:
 
 
 @dataclass(frozen=True)
+class SettingChange:
+    """A single native config option change (LuCI-style UCI path).
+
+    ``path`` is the concrete option path (e.g. ``network.lan.ipaddr``). ``change``
+    is ``"added"`` (new option), ``"removed"`` (option dropped) or ``"modified"``.
+    """
+
+    path: str
+    old: str
+    new: str
+    change: str = "modified"  # "added" | "removed" | "modified"
+
+
+@dataclass(frozen=True)
 class DeviceDiff:
     """Pending changes for one device."""
 
@@ -172,6 +194,7 @@ class DeviceDiff:
     changes: list[ChangeRow] = field(default_factory=list)
     platform: str = ""
     command_diff: list[CommandLine] = field(default_factory=list)
+    setting_diff: list[SettingChange] = field(default_factory=list)
 
 
 @dataclass(frozen=True)
@@ -187,6 +210,11 @@ class ConfigDiff:
     @property
     def change_count(self) -> int:
         return len(self.devices)
+
+    @property
+    def total_changes(self) -> int:
+        """Total number of individual option-level changes across all devices."""
+        return sum(len(d.changes) for d in self.devices)
 
 
 @dataclass(frozen=True)

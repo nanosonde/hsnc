@@ -104,3 +104,39 @@ def test_command_diff_absent_without_renderer(config):
     diff = GetConfigDiff(config, FakeAppliedConfigStore()).execute()
     assert all(d.command_diff == [] for d in diff.devices)
     assert all(d.platform == "" for d in diff.devices)
+
+
+def test_uci_settings_expose_concrete_paths():
+    settings = UciConfigRenderer().settings(_openwrt_switch())
+    assert settings["system.@system[0].hostname"] == "GS1900-OWRT"
+    assert settings["network.lan.ipaddr"] == "192.168.50.4"
+    # bridge-vlan keyed by VLAN id, access port 3 untagged + PVID member
+    assert settings["network.@bridge-vlan[30].vlan"] == "30"
+    assert settings["network.@bridge-vlan[30].ports"] == "lan1:t lan3:u*"
+
+
+def test_setting_diff_reports_uci_path_changes(config, devices):
+    applied = FakeAppliedConfigStore(devices=copy.deepcopy(devices))
+    # gateway-1 routes to the UCI renderer; rename it in the desired config
+    gateway = config.get_device("gateway-1")
+    gateway.name = "ER605-edge"
+
+    diff = GetConfigDiff(config, applied, DefaultConfigRendererFactory()).execute()
+    modified = next(d for d in diff.devices if d.device_id == "gateway-1")
+
+    host = next(
+        s for s in modified.setting_diff if s.path == "system.@system[0].hostname"
+    )
+    assert host.change == "modified"
+    assert host.old == "ER605"
+    assert host.new == "ER605-edge"
+
+
+def test_setting_diff_empty_for_jetstream():
+    # JetStream renderer exposes no option paths -> no UCI-style setting diff
+    assert JetStreamCliRenderer().settings(_jetstream_switch()) == {}
+
+
+def test_setting_diff_absent_without_renderer(config):
+    diff = GetConfigDiff(config, FakeAppliedConfigStore()).execute()
+    assert all(d.setting_diff == [] for d in diff.devices)

@@ -56,7 +56,7 @@ def test_diff_detects_modified_field(config, devices):
     modified = [d for d in diff.devices if d.state == "modified"]
     assert len(modified) == 1
     assert modified[0].device_id == "switch-1"
-    assert any(c.field == "VLANs" for c in modified[0].changes)
+    assert any(c.group == "VLANs" for c in modified[0].changes)
 
 
 def test_apply_with_mock_clears_diff(config, adapters):
@@ -101,8 +101,8 @@ def test_apply_records_field_changes_for_history(config, adapters, devices):
     outcomes = history.events[0].outcomes
     # only the changed device is recorded
     assert [o.device_id for o in outcomes] == ["switch-1"]
-    # and the specific field change is captured
-    assert any(c.field == "VLANs" for c in outcomes[0].changes)
+    # and the specific field change is captured (granular VLAN row)
+    assert any(c.field.startswith("VLAN ") for c in outcomes[0].changes)
 
 
 def test_apply_surfaces_not_implemented_per_device(config):

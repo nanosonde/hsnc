@@ -13,9 +13,10 @@ managed switches** (with VLANs).
 - **Packaging:** Docker container served over HTTP via gunicorn
 
 > **MVP status:** Devices are served by a built-in **mock adapter** so the UI is
-> fully usable without hardware. Real device drivers (OpenWrt SSH/UCI, JetStream
-> SSH/CLI) and declarative config push are present as interface-conformant
-> **stubs** and slot in without touching the inner layers.
+> fully usable without hardware. VLAN, port and wireless editing plus the
+> review/apply workflow are implemented end-to-end against the mock adapter.
+> Real device drivers (OpenWrt SSH/UCI, JetStream SSH/CLI) are present as
+> interface-conformant **stubs** and slot in without touching the inner layers.
 
 ## Architecture
 
@@ -58,6 +59,21 @@ pytest
 ruff check src tests
 ```
 
+## Pending changes & apply
+
+The controller is the source of truth: edits to VLANs, ports and wireless are
+staged as **pending changes** rather than pushed immediately. From
+**Devices → Review & Apply** (`/config/pending`) you can:
+
+- review each device's changes grouped by section (General / VLANs / Ports /
+  Wireless) as a **Current → New** diff;
+- inspect the concrete commands that will be sent, plus a LuCI-style
+  **UCI field diff** for OpenWrt devices;
+- **Apply** or **Revert** per device, or **Apply All** / **Revert All Changes**.
+
+Nothing is sent to a device until you apply. Each apply is recorded in the
+history (`/config/history`).
+
 ## Backups
 
 From the UI (admin only): **Backup → Download / Import**.
@@ -92,8 +108,6 @@ YAML files live in `OMADA_CONFIG_DIR` (default `./config`, or `/data/config` in 
 ## Roadmap
 
 - Implement `OpenWrtSshAdapter` (ubus/uci over SSH) and `JetStreamCliAdapter`.
-- Declarative config push (controller as source of truth).
-- Editable VLAN/port configuration and wireless settings.
 - Multi-site support.
 
 ## License
