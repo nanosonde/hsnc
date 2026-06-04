@@ -120,6 +120,24 @@ class YamlConfigRepository(ConfigRepository, ConfigArchive, ConfigWriter):
         self._backup_managed_files()
         self._atomic_write(DEVICES_FILE, contents)
 
+    def delete_device(self, device_id: str) -> None:
+        """Remove a device from devices.yaml (validated + backed up)."""
+
+        devices = self.list_devices()
+        remaining = [d for d in devices if d.id != device_id]
+        if len(remaining) == len(devices):
+            return  # nothing to delete
+
+        file_schema = DevicesFileSchema(
+            devices=[self._from_device(d) for d in remaining]
+        )
+        payload = file_schema.model_dump(mode="python")
+        contents = yaml.safe_dump(payload, default_flow_style=False, sort_keys=False)
+        self._validate(DEVICES_FILE, contents)
+
+        self._backup_managed_files()
+        self._atomic_write(DEVICES_FILE, contents)
+
     # -- mapping helpers --------------------------------------------------
 
     @staticmethod

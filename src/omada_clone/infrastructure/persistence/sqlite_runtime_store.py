@@ -203,19 +203,22 @@ class SqliteRuntimeStore(RuntimeStore, ApplyHistoryStore):
 
     def record_apply_event(self, event: ApplyEvent) -> None:
         details = json.dumps(
-            [
-                {
-                    "device_id": o.device_id,
-                    "device_name": o.device_name,
-                    "ok": o.ok,
-                    "message": o.message,
-                    "changes": [
-                        {"field": c.field, "old": c.old, "new": c.new}
-                        for c in o.changes
-                    ],
-                }
-                for o in event.outcomes
-            ]
+            {
+                "action": event.action,
+                "outcomes": [
+                    {
+                        "device_id": o.device_id,
+                        "device_name": o.device_name,
+                        "ok": o.ok,
+                        "message": o.message,
+                        "changes": [
+                            {"field": c.field, "old": c.old, "new": c.new}
+                            for c in o.changes
+                        ],
+                    }
+                    for o in event.outcomes
+                ],
+            }
         )
         with self._lock:
             self._conn.execute(
@@ -239,6 +242,15 @@ class SqliteRuntimeStore(RuntimeStore, ApplyHistoryStore):
             ).fetchall()
         events: list[ApplyEvent] = []
         for row in rows:
+            details = json.loads(row["details_json"])
+            # Back-compat: legacy rows stored a bare list of outcomes; new rows
+            # wrap them in a dict alongside the action type.
+            if isinstance(details, dict):
+                action = details.get("action", "apply")
+                raw_outcomes = details.get("outcomes", [])
+            else:
+                action = "apply"
+                raw_outcomes = details
             outcomes = [
                 ApplyOutcome(
                     device_id=o["device_id"],
@@ -250,7 +262,7 @@ class SqliteRuntimeStore(RuntimeStore, ApplyHistoryStore):
                         for c in o.get("changes", [])
                     ],
                 )
-                for o in json.loads(row["details_json"])
+                for o in raw_outcomes
             ]
             events.append(
                 ApplyEvent(
@@ -258,6 +270,7 @@ class SqliteRuntimeStore(RuntimeStore, ApplyHistoryStore):
                     applied_at=datetime.fromisoformat(row["applied_at"]),
                     username=row["username"],
                     ok=bool(row["ok"]),
+                    action=action,
                     outcomes=outcomes,
                 )
             )

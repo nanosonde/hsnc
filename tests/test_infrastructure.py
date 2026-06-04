@@ -134,6 +134,7 @@ def test_sqlite_apply_event_persists_and_roundtrips(tmp_path):
     assert len(listed) == 1
     assert listed[0].username == "admin"
     assert listed[0].ok is False
+    assert listed[0].action == "apply"
     assert len(listed[0].outcomes) == 2
     assert listed[0].outcomes[1].message == "not implemented"
 
@@ -146,6 +147,18 @@ def test_sqlite_apply_event_persists_and_roundtrips(tmp_path):
     restored = store.list_apply_events()
     assert len(restored) == 1
     assert restored[0].outcomes[1].message == "not implemented"
+
+    # a re-read event roundtrips its action type
+    store.record_apply_event(
+        ApplyEvent(
+            applied_at=datetime(2026, 6, 2, 9, 0, tzinfo=UTC),
+            username="admin",
+            ok=True,
+            action="reread",
+            outcomes=[ApplyOutcome("d1", "Switch", ok=True)],
+        )
+    )
+    assert store.list_apply_events()[0].action == "reread"
     store.close()
 
 

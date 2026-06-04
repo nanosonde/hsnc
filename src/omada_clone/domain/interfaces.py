@@ -55,6 +55,15 @@ class DeviceAdapter(ABC):
         """Return the device enriched with live runtime status."""
 
     @abstractmethod
+    def fetch_config(self, device: Device) -> Device:
+        """Read the live configuration from the device.
+
+        Returns a fully populated :class:`Device` reflecting the configuration
+        currently running on the physical hardware, so it can be stored back
+        into the declarative inventory.
+        """
+
+    @abstractmethod
     def fetch_clients(self, device: Device) -> list[Client]:
         """Return clients currently associated with the device."""
 
@@ -159,6 +168,10 @@ class ConfigWriter(ABC):
     @abstractmethod
     def save_device(self, device: Device) -> None:
         """Create or update a single device in the inventory."""
+
+    @abstractmethod
+    def delete_device(self, device_id: str) -> None:
+        """Remove a single device from the inventory."""
 
 
 class AppliedConfigStore(ABC):

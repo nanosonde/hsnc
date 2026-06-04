@@ -60,6 +60,9 @@ class FakeDeviceAdapter(DeviceAdapter):
     def fetch_status(self, device: Device) -> Device:
         return device
 
+    def fetch_config(self, device: Device) -> Device:
+        return device
+
     def fetch_clients(self, device: Device) -> list[Client]:
         return list(self._clients.get(device.id, []))
 
@@ -122,6 +125,11 @@ class FakeConfigWriter(ConfigWriter):
             device if d.id == device.id else d for d in self._repo._devices
         ]
         self.saved.append(device)
+
+    def delete_device(self, device_id: str) -> None:
+        self._repo._devices = [
+            d for d in self._repo._devices if d.id != device_id
+        ]
 
 
 class FakeAppliedConfigStore(AppliedConfigStore):

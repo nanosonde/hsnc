@@ -28,6 +28,12 @@ class OpenWrtSshAdapter(DeviceAdapter):
             "(planned: ubus call system board / network.interface status)."
         )
 
+    def fetch_config(self, device: Device) -> Device:
+        raise NotImplementedError(
+            "OpenWrtSshAdapter.fetch_config is not implemented yet "
+            "(planned: read uci network/wireless/system over SSH)."
+        )
+
     def fetch_clients(self, device: Device) -> list[Client]:
         raise NotImplementedError(
             "OpenWrtSshAdapter.fetch_clients is not implemented yet "

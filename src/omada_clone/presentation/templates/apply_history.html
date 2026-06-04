@@ -14,6 +14,9 @@
 <div class="card card-pad" style="margin-top:16px">
   <h3 class="card-title">
     {{ event.applied_at.strftime('%Y-%m-%d %H:%M:%S UTC') }}
+    <span class="pill" style="margin-left:8px">
+      {{ 'Re-read' if event.action == 'reread' else 'Apply' }}
+    </span>
     <span class="status {{ 'connected' if event.ok else 'disconnected' }}" style="margin-left:8px">
       {{ 'SUCCESS' if event.ok else 'PARTIAL/FAILED' }}
     </span>

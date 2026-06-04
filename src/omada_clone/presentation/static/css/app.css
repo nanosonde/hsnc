@@ -177,6 +177,25 @@ table.data tbody tr:hover { background: #f7f9fb; }
 .btn-primary { background: var(--omada-blue); border-color: var(--omada-blue); color: #fff; }
 .btn-primary:hover { background: #2c7fd0; }
 
+/* ---------- Card header (title + actions) ---------- */
+.card-head {
+  display: flex; align-items: center; justify-content: space-between;
+  gap: 12px; flex-wrap: wrap;
+}
+.card-head .card-title { margin: 0; }
+
+/* ---------- Row / icon actions ---------- */
+.row-actions { display: inline-flex; align-items: center; gap: 6px; }
+.row-actions form { display: inline-flex; margin: 0; }
+.icon-btn {
+  display: inline-flex; align-items: center; justify-content: center;
+  width: 30px; height: 30px; padding: 0; border-radius: 6px;
+  border: 1px solid var(--border); background: #fff; color: var(--muted);
+  cursor: pointer;
+}
+.icon-btn:hover { background: #f5f7f9; color: var(--text); text-decoration: none; }
+.icon-btn.danger:hover { background: #fdecef; color: var(--danger); border-color: var(--danger); }
+
 /* ---------- Pagination ---------- */
 .pagination { display: flex; align-items: center; gap: 10px; margin-top: 12px; color: var(--muted); font-size: 13px; }
 .pagination .pages { display: flex; gap: 4px; }

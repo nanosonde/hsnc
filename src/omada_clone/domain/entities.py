@@ -172,4 +172,5 @@ class ApplyEvent:
     username: str
     ok: bool
     outcomes: list[ApplyOutcome] = field(default_factory=list)
+    action: str = "apply"
     id: int | None = None

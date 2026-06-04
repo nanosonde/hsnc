@@ -26,6 +26,9 @@ class _RaisingAdapter(DeviceAdapter):
     def fetch_status(self, device: Device) -> Device:
         return device
 
+    def fetch_config(self, device: Device) -> Device:
+        return device
+
     def fetch_clients(self, device):
         return []
 
@@ -179,6 +182,9 @@ def test_plan_marks_unsupported_devices(config):
             return False
 
         def fetch_status(self, device: Device) -> Device:
+            return device
+
+        def fetch_config(self, device: Device) -> Device:
             return device
 
         def fetch_clients(self, device):

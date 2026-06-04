@@ -28,6 +28,12 @@ class JetStreamCliAdapter(DeviceAdapter):
             "(planned: 'show system-info' / 'show interface status')."
         )
 
+    def fetch_config(self, device: Device) -> Device:
+        raise NotImplementedError(
+            "JetStreamCliAdapter.fetch_config is not implemented yet "
+            "(planned: 'show running-config' VLAN/port parsing)."
+        )
+
     def fetch_clients(self, device: Device) -> list[Client]:
         raise NotImplementedError(
             "JetStreamCliAdapter.fetch_clients is not implemented yet "

@@ -241,6 +241,29 @@ class ApplyResult:
 
 
 @dataclass(frozen=True)
+class DeviceSyncResult:
+    device_id: str
+    device_name: str
+    ok: bool
+    message: str = ""
+
+
+@dataclass(frozen=True)
+class SyncResult:
+    """Outcome of re-reading configuration from one or more devices."""
+
+    results: list[DeviceSyncResult] = field(default_factory=list)
+
+    @property
+    def ok(self) -> bool:
+        return all(r.ok for r in self.results)
+
+    @property
+    def failures(self) -> list[DeviceSyncResult]:
+        return [r for r in self.results if not r.ok]
+
+
+@dataclass(frozen=True)
 class ApplyPlanItem:
     """The planned action for a single device in a dry-run."""
 

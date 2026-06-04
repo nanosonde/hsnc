@@ -16,6 +16,7 @@ from ..application.use_cases.apply_history import ListApplyHistory
 from ..application.use_cases.authenticate_user import AuthenticateUser
 from ..application.use_cases.backup import ExportBackup, ImportBackup
 from ..application.use_cases.config_diff import GetConfigDiff
+from ..application.use_cases.delete_device import DeleteDevice
 from ..application.use_cases.edit_device_config import (
     DeleteVlan,
     SavePort,
@@ -28,6 +29,7 @@ from ..application.use_cases.list_clients import ListClients
 from ..application.use_cases.list_devices import GetDeviceDetail, ListDevices
 from ..application.use_cases.poll_device_state import PollDeviceState
 from ..application.use_cases.revert_config import RevertPendingChanges
+from ..application.use_cases.sync_device_config import SyncDeviceConfig
 from .config.applied_config_store import FileAppliedConfigStore
 from .config.yaml_config_repository import YamlConfigRepository
 from .devices.config_renderers import DefaultConfigRendererFactory
@@ -103,6 +105,14 @@ class Container:
         self.revert_changes = RevertPendingChanges(
             self.config, self.applied_config, self.config
         )
+        self.sync_device_config = SyncDeviceConfig(
+            self.config,
+            self.adapters,
+            self.config,
+            self.applied_config,
+            self.runtime,
+        )
+        self.delete_device = DeleteDevice(self.config, self.applied_config)
 
     def close(self) -> None:
         self.runtime.close()

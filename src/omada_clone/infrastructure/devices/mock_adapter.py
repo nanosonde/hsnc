@@ -54,6 +54,11 @@ class MockDeviceAdapter(DeviceAdapter):
             device.status = DeviceStatus.CONNECTED
         return device
 
+    def fetch_config(self, device: Device) -> Device:
+        # The mock has no separate source of truth, so a re-read simply returns
+        # the device enriched with its live status, demonstrating the flow.
+        return self.fetch_status(device)
+
     def fetch_clients(self, device: Device) -> list[Client]:
         clients: list[Client] = []
         for spec in _DEMO_CLIENTS.get(device.id, []):

@@ -1,10 +1,18 @@
-"""Devices routes: list and detail."""
+"""Devices routes: list, detail, and inventory actions (re-read, delete)."""
 
 from __future__ import annotations
 
-from flask import Blueprint, abort, current_app, render_template
+from flask import (
+    Blueprint,
+    abort,
+    current_app,
+    flash,
+    redirect,
+    render_template,
+    url_for,
+)
 
-from ..auth import login_required
+from ..auth import current_user, login_required, role_required
 
 bp = Blueprint("devices", __name__)
 
@@ -25,3 +33,48 @@ def detail(device_id: str):
     if detail is None:
         abort(404)
     return render_template("device_detail.html", detail=detail, active="devices")
+
+
+def _flash_sync_result(result) -> None:
+    if result.failures:
+        for failure in result.failures:
+            flash(f"{failure.device_name}: {failure.message}", "error")
+    ok_count = len([r for r in result.results if r.ok])
+    if ok_count:
+        flash(f"Re-read configuration from {ok_count} device(s).", "success")
+    elif not result.results:
+        flash("No devices to re-read.", "success")
+
+
+@bp.route("/devices/sync", methods=["POST"])
+@role_required("admin")
+def sync_all():
+    container = current_app.config["CONTAINER"]
+    user = current_user() or {}
+    result = container.sync_device_config.execute(username=user.get("username", ""))
+    _flash_sync_result(result)
+    return redirect(url_for("devices.index"))
+
+
+@bp.route("/devices/<device_id>/sync", methods=["POST"])
+@role_required("admin")
+def sync_device(device_id: str):
+    container = current_app.config["CONTAINER"]
+    user = current_user() or {}
+    result = container.sync_device_config.execute(
+        device_ids=[device_id], username=user.get("username", "")
+    )
+    _flash_sync_result(result)
+    return redirect(url_for("devices.index"))
+
+
+@bp.route("/devices/<device_id>/delete", methods=["POST"])
+@role_required("admin")
+def delete_device(device_id: str):
+    container = current_app.config["CONTAINER"]
+    device = container.get_device_detail.execute(device_id)
+    if device is None:
+        abort(404)
+    container.delete_device.execute(device_id)
+    flash("Device removed from the inventory.", "success")
+    return redirect(url_for("devices.index"))
