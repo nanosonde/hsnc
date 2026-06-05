@@ -27,7 +27,6 @@ coverage.xml
 /data/backups/
 /data/desired_config.json
 /data/current_config.json
-/data/applied_config.json
 /data/config-backups/
 
 # Local device inventory (copied from config/devices.yaml.example)
