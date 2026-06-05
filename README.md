@@ -107,7 +107,27 @@ pip install -e ".[dev]"
 sdnman-ctl serve --debug          # http://localhost:8080
 ```
 
-## Tests & lint
+## Developer tasks
+
+A [`Makefile`](Makefile) wraps the common workflows (run `make help` for the full
+list):
+
+```bash
+make check        # fast syntax compile-check of all sources
+make lint         # ruff
+make unit         # unit tests (pytest)
+make integration  # smoke test against the mock SSH containers (needs docker)
+make test         # unit + integration
+make all          # check + lint + test
+make mocks-up     # build & start the mock SSH devices (detached)
+make mocks-down   # stop and remove the mock devices
+make docker-build # build the production image
+```
+
+The targets use the project virtualenv (`.venv`) automatically when present;
+override the interpreter with `make PYTHON=/path/to/python <target>`.
+
+Or run the tools directly:
 
 ```bash
 pytest
