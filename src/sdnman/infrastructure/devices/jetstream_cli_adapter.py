@@ -57,8 +57,10 @@ class JetStreamCliAdapter(DeviceAdapter):
         return replace(
             device,
             name=hostname or device.name,
-            vlans=vlans or device.vlans,
-            ports=ports or device.ports,
+            # A re-read is the single source of truth: the parsed config replaces
+            # the inventory wholesale, so an empty result clears stale entries.
+            vlans=vlans,
+            ports=ports,
         )
 
     # -- writes --------------------------------------------------------------

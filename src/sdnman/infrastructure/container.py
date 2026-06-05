@@ -51,6 +51,7 @@ class Settings:
     use_mock_devices: bool = True
     poll_interval_seconds: int = 30
     retention_days: int = 30
+    monitor_cache_ttl_seconds: int = 30
     ssh: SshConnectionSettings = field(default_factory=SshConnectionSettings)
 
     @property
@@ -90,18 +91,25 @@ class Container:
         self.topology_provider = SimpleTopologyProvider()
         self.applied_config = FileAppliedConfigStore(settings.data_dir)
 
-        # application services
+        # application services. The poller scrapes fresh every cycle (records the
+        # time-series), so it uses an uncached view. Web reads use a short-TTL
+        # cache so browsing does not re-SSH every device on each page load.
         self.network = NetworkStateService(self.config, self.monitoring)
+        self.network_cached = NetworkStateService(
+            self.config,
+            self.monitoring,
+            cache_ttl_seconds=settings.monitor_cache_ttl_seconds,
+        )
 
         # use cases
         self.authenticate_user = AuthenticateUser(self.config, verify_password)
         self.get_dashboard_summary = GetDashboardSummary(
-            self.config, self.network, self.runtime
+            self.config, self.network_cached, self.runtime
         )
-        self.list_devices = ListDevices(self.network)
-        self.get_device_detail = GetDeviceDetail(self.network)
-        self.list_clients = ListClients(self.network)
-        self.get_topology = GetTopology(self.network, self.topology_provider)
+        self.list_devices = ListDevices(self.network_cached)
+        self.get_device_detail = GetDeviceDetail(self.network_cached)
+        self.list_clients = ListClients(self.network_cached)
+        self.get_topology = GetTopology(self.network_cached, self.topology_provider)
         self.poll_device_state = PollDeviceState(
             self.network, self.runtime, retention_days=settings.retention_days
         )

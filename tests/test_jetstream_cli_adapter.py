@@ -77,9 +77,10 @@ def _monitor(runner: FakeSshRunner) -> JetStreamSshMonitoringProvider:
 
 
 def test_fetch_status_parses_system_info() -> None:
-    runner = FakeSshRunner({"show system-info": _SYSTEM_INFO})
+    runner = FakeSshRunner(shell_output=_SYSTEM_INFO)
     device = _monitor(runner).fetch_status(_device())
 
+    assert runner.shell_invocations == [["show system-info"]]
     assert device.status is DeviceStatus.CONNECTED
     assert device.model == "TL-SG2210P"
     assert device.firmware == "5.0.6 Build 20231010 (mock)"
@@ -103,12 +104,28 @@ def test_fetch_config_parses_vlans_and_ports() -> None:
 
 
 def test_fetch_clients_from_mac_table() -> None:
-    runner = FakeSshRunner({"show mac address-table": _MAC_TABLE})
+    runner = FakeSshRunner(shell_output=_MAC_TABLE)
     clients = _monitor(runner).fetch_clients(_device())
 
+    assert runner.shell_invocations == [["show mac address-table"]]
     assert [str(c.mac) for c in clients] == ["00:11:22:AA:BB:01", "00:11:22:AA:BB:03"]
     assert clients[0].connection is ConnectionType.WIRED
     assert clients[0].ap_or_port == "Gi1/0/1"
+
+
+def test_fetch_config_is_authoritative_and_clears_stale_entries() -> None:
+    # An empty running-config means the switch has no VLANs/ports configured.
+    # A re-read is the single source of truth, so stale inventory entries must
+    # be cleared rather than preserved.
+    runner = FakeSshRunner({"show running-config": "#\nend\n"})
+    device = _device()
+    device.vlans = [Vlan(10, "Stale")]
+    device.ports = [SwitchPort(number=1, name="Stale")]
+
+    fresh = _adapter(runner).fetch_config(device)
+
+    assert fresh.vlans == []
+    assert fresh.ports == []
 
 
 def test_push_config_runs_single_interactive_shell_session() -> None:

@@ -123,17 +123,38 @@ class ApplyConfig:
                     DeviceApplyResult(device.id, device.name, ok=False, message=str(exc))
                 )
 
+        # Devices dropped from the inventory are deprovisioned: there is nothing
+        # to push, so applying simply removes them from the applied snapshot.
+        removed = [
+            (d.device_id, d.device_name)
+            for d in diff.devices
+            if d.state == "removed" and (selected is None or d.device_id in selected)
+        ]
+        for device_id, device_name in removed:
+            results.append(
+                DeviceApplyResult(
+                    device_id,
+                    device_name,
+                    ok=True,
+                    message="Removed from inventory.",
+                )
+            )
+
         result = ApplyResult(results=results)
 
         # Merge successfully-applied devices into the existing snapshot so a
         # partial or per-device apply keeps the rest of the snapshot intact and
-        # the diff continues to flag what still needs provisioning.
+        # the diff continues to flag what still needs provisioning. Deprovisioned
+        # devices are dropped so they no longer linger in the applied snapshot.
+        removed_ids = {device_id for device_id, _ in removed}
         ok_ids = {r.device_id for r in results if r.ok}
         if ok_ids:
             snapshot = {d.id: d for d in self._applied.load()}
             for device in devices:
                 if device.id in ok_ids:
                     snapshot[device.id] = device
+            for device_id in removed_ids:
+                snapshot.pop(device_id, None)
             self._applied.save(list(snapshot.values()))
 
         if results:

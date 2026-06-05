@@ -24,6 +24,7 @@ from .ssh_transport import (
     RunnerFactory,
     SshCommandRunner,
     SshConnectionResolver,
+    SshError,
     default_runner_factory,
 )
 
@@ -36,7 +37,11 @@ _UPTIME_RE = re.compile(
 
 
 class OpenWrtSshMonitoringProvider(MonitoringProvider):
-    """Scrapes OpenWrt runtime state over SSH (``ubus``) as the fallback source."""
+    """Scrapes OpenWrt runtime state over SSH (``ubus``) as the fallback source.
+
+    DHCP leases come from the ``dhcp`` ubus object when present (odhcpd) and fall
+    back to the dnsmasq lease file (``/tmp/dhcp.leases``) otherwise.
+    """
 
     def __init__(
         self,
@@ -70,7 +75,18 @@ class OpenWrtSshMonitoringProvider(MonitoringProvider):
     def fetch_clients(self, device: Device) -> list[Client]:
         runner = self._runner(device)
         with runner:
-            raw = runner.run("ubus call dhcp ipv4leases")
+            try:
+                raw = runner.run("ubus call dhcp ipv4leases")
+            except SshError:
+                # Devices that serve DHCP via dnsmasq have no odhcpd ``dhcp``
+                # ubus object, so fall back to parsing the dnsmasq lease file.
+                return self._clients_from_lease_file(
+                    device, runner.run("cat /tmp/dhcp.leases")
+                )
+        return self._clients_from_ubus(device, raw)
+
+    @staticmethod
+    def _clients_from_ubus(device: Device, raw: str) -> list[Client]:
         data = json.loads(raw) if raw.strip() else {}
         clients: list[Client] = []
         for bridge in (data.get("device") or {}).values():
@@ -92,6 +108,33 @@ class OpenWrtSshMonitoringProvider(MonitoringProvider):
                         site_id=device.site_id,
                     )
                 )
+        return clients
+
+    @staticmethod
+    def _clients_from_lease_file(device: Device, raw: str) -> list[Client]:
+        # dnsmasq lease line: "<expiry> <mac> <ip> <hostname> <client-id>".
+        clients: list[Client] = []
+        for line in raw.splitlines():
+            parts = line.split()
+            if len(parts) < 4:
+                continue
+            mac, address, hostname = parts[1], parts[2], parts[3]
+            if mac.count(":") != 5:
+                continue
+            mac_obj = MacAddress(mac)
+            name = hostname if hostname not in ("", "*") else str(mac_obj)
+            clients.append(
+                Client(
+                    id=f"{device.id}-{mac_obj}",
+                    name=name,
+                    mac=mac_obj,
+                    connection=ConnectionType.WIRED,
+                    status=DeviceStatus.CONNECTED,
+                    ip=IpAddress(address) if address not in ("", "*") else None,
+                    ap_or_port=device.name,
+                    site_id=device.site_id,
+                )
+            )
         return clients
 
 
@@ -116,7 +159,9 @@ class JetStreamSshMonitoringProvider(MonitoringProvider):
     def fetch_status(self, device: Device) -> Device:
         runner = self._runner(device)
         with runner:
-            raw = runner.run("show system-info")
+            # JetStream switches reject SSH ``exec`` channels, so reads go
+            # through one interactive shell session.
+            raw = runner.run_shell(["show system-info"])
         info = self._parse_key_values(raw)
         mac = info.get("MAC Address")
         return replace(
@@ -132,7 +177,9 @@ class JetStreamSshMonitoringProvider(MonitoringProvider):
     def fetch_clients(self, device: Device) -> list[Client]:
         runner = self._runner(device)
         with runner:
-            raw = runner.run("show mac address-table")
+            # JetStream switches reject SSH ``exec`` channels, so reads go
+            # through one interactive shell session.
+            raw = runner.run_shell(["show mac address-table"])
         clients: list[Client] = []
         for mac, _vlan, port in _MAC_TABLE_RE.findall(raw):
             clients.append(

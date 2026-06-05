@@ -125,6 +125,43 @@ def test_fetch_clients_from_dhcp_leases() -> None:
     assert str(clients[0].ip) == "192.168.50.20"
 
 
+def test_fetch_clients_falls_back_to_lease_file_without_odhcpd() -> None:
+    leases = (
+        "1700000000 1c:61:b4:00:11:22 192.168.50.20 desktop 01:1c:61:b4:00:11:22\n"
+        "1700000100 a4:83:e7:00:33:44 192.168.50.21 * 01:a4:83:e7:00:33:44\n"
+    )
+    runner = FakeSshRunner(
+        {"cat /tmp/dhcp.leases": leases},
+        errors=["ubus call dhcp ipv4leases"],
+    )
+    clients = _monitor(runner).fetch_clients(_device())
+
+    assert [str(c.mac) for c in clients] == ["1C:61:B4:00:11:22", "A4:83:E7:00:33:44"]
+    assert clients[0].name == "desktop"
+    assert str(clients[0].ip) == "192.168.50.20"
+    # Hostname "*" in the lease file falls back to the MAC as the display name.
+    assert clients[1].name == "A4:83:E7:00:33:44"
+
+
+def test_fetch_config_is_authoritative_and_clears_stale_entries() -> None:
+    # The device reports no bridge-vlans, no wireless and no ports, but the
+    # inventory still carries stale values. A re-read is the single source of
+    # truth, so the returned device must come back empty, not keep the old data.
+    from sdnman.domain.entities import SwitchPort, Vlan
+
+    runner = FakeSshRunner({"uci show system": _UCI_SYSTEM})  # network/wireless empty
+    device = _device()
+    device.vlans = [Vlan(vlan_id=10, name="Stale")]
+    device.ports = [SwitchPort(number=1, name="Stale")]
+    device.ssids = ["StaleNet"]
+
+    fresh = _adapter(runner).fetch_config(device)
+
+    assert fresh.vlans == []
+    assert fresh.ports == []
+    assert fresh.ssids == []
+
+
 def test_push_config_clears_existing_bridge_vlans_then_renders() -> None:
     runner = FakeSshRunner({"uci show network": _UCI_NETWORK})
     device = _device()

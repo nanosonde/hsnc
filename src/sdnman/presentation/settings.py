@@ -16,11 +16,13 @@ def settings_from_env() -> Settings:
     use_mock = os.environ.get("SDNMAN_USE_MOCK_DEVICES", "1") not in ("0", "false", "False")
     poll_interval = int(os.environ.get("SDNMAN_POLL_INTERVAL", "30"))
     retention_days = int(os.environ.get("SDNMAN_RETENTION_DAYS", "30"))
+    monitor_cache_ttl = int(os.environ.get("SDNMAN_MONITOR_CACHE_TTL", "30"))
     return Settings(
         config_dir=config_dir,
         data_dir=data_dir,
         use_mock_devices=use_mock,
         poll_interval_seconds=poll_interval,
         retention_days=retention_days,
+        monitor_cache_ttl_seconds=monitor_cache_ttl,
         ssh=SshConnectionSettings.from_env(),
     )

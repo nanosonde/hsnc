@@ -9,7 +9,7 @@ from sdnman.application.use_cases.config_diff import GetConfigDiff
 from sdnman.domain.entities import Device, Vlan
 from sdnman.domain.enums import DeviceKind, DeviceStatus
 from sdnman.domain.interfaces import DeviceAdapter, DeviceAdapterFactory
-from sdnman.domain.value_objects import MacAddress
+from sdnman.domain.value_objects import IpAddress, MacAddress
 
 from .fakes import (
     FakeAppliedConfigStore,
@@ -77,6 +77,35 @@ def test_apply_with_mock_clears_diff(config, adapters):
     assert len(history.events) == 1
     assert history.events[0].username == "admin"
     assert history.events[0].ok
+
+
+def test_apply_deprovisions_devices_removed_from_inventory(config, adapters):
+    # An applied snapshot device that is no longer in the inventory must be
+    # dropped from the snapshot when changes are applied, not lingered forever.
+    orphan = Device(
+        id="orphan-1",
+        name="Old Switch",
+        kind=DeviceKind.SWITCH,
+        ip=IpAddress("192.168.50.99"),
+    )
+    applied = FakeAppliedConfigStore(
+        devices=copy.deepcopy(config.list_devices()) + [orphan]
+    )
+    history = FakeApplyHistoryStore()
+
+    # Sanity: the orphan shows up as a "removed" pending change first.
+    diff = GetConfigDiff(config, applied).execute()
+    assert any(d.device_id == "orphan-1" and d.state == "removed" for d in diff.devices)
+
+    result = ApplyConfig(config, adapters, applied, history).execute(username="admin")
+
+    assert result.ok
+    # The orphan is gone from the applied snapshot and the diff is clean.
+    assert "orphan-1" not in {d.id for d in applied.load()}
+    assert not GetConfigDiff(config, applied).execute().has_changes
+    # The deprovision is recorded in history.
+    outcomes = {o.device_id: o for o in history.events[0].outcomes}
+    assert outcomes["orphan-1"].ok
 
 
 def test_apply_skips_unchanged_devices(config, adapters):

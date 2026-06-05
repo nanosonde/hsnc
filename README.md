@@ -195,6 +195,7 @@ from the baked-in template on first run if one does not already exist.
 | `SDNMAN_USE_MOCK_DEVICES`  | `1`     | `1` mock providers, `0` real SSH drivers |
 | `SDNMAN_POLL_INTERVAL`     | `30`    | Poller cycle interval (seconds)          |
 | `SDNMAN_RETENTION_DAYS`    | `30`    | Drop runtime rows older than N days (`0` disables pruning) |
+| `SDNMAN_MONITOR_CACHE_TTL` | `30`    | Web caches live device status/clients for N seconds so browsing does not re-SSH every page load (`0` disables) |
 | `SDNMAN_SECRET_KEY`        | dev key | Flask session secret (set in production) |
 
 #### Real-device SSH (when `SDNMAN_USE_MOCK_DEVICES=0`)

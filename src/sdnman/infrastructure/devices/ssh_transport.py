@@ -165,22 +165,28 @@ class FakeSshRunner(SshCommandRunner):
     """In-memory :class:`SshCommandRunner` for unit tests.
 
     ``responses`` maps a command (matched exactly first, then by longest prefix)
-    to canned stdout. Executed commands and interactive shell invocations are
-    recorded so tests can assert on the commands an adapter sends.
+    to canned stdout. Commands whose prefix is listed in ``errors`` raise
+    :class:`SshError`, so tests can exercise fallback paths. Executed commands and
+    interactive shell invocations are recorded so tests can assert on the
+    commands an adapter sends.
     """
 
     def __init__(
         self,
         responses: dict[str, str] | None = None,
         shell_output: str = "",
+        errors: Sequence[str] | None = None,
     ) -> None:
         self._responses = responses or {}
         self._shell_output = shell_output
+        self._errors = tuple(errors or ())
         self.commands: list[str] = []
         self.shell_invocations: list[list[str]] = []
 
     def run(self, command: str) -> str:
         self.commands.append(command)
+        if any(command.startswith(prefix) for prefix in self._errors):
+            raise SshError(f"command {command!r} failed (fake)")
         if command in self._responses:
             return self._responses[command]
         best = ""
