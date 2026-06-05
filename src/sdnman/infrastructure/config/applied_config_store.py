@@ -1,42 +1,50 @@
-"""File-based :class:`AppliedConfigStore` (JSON snapshot under the data dir).
+"""Current-config store: the last configuration read from the devices.
 
-Records the device configuration as of the last successful apply so the
-controller can compute pending changes (desired YAML vs applied snapshot).
-The on-disk format reuses the same Pydantic device schema as the YAML config.
+Records the device configuration as last read from the hardware (the *baseline*)
+so the controller can compute pending changes (desired vs current). Persisted as
+``current_config.json`` under the data dir; the configuration payload is keyed by
+device id and merged with the connection profiles from ``devices.yaml`` on load,
+mirroring :class:`LayeredConfigRepository`.
+
+This satisfies the :class:`AppliedConfigStore` port: "applied" and "current" are
+the same concept — the configuration the controller believes is running on each
+device.
 """
 
 from __future__ import annotations
 
-import json
 from pathlib import Path
 
 from ...domain.entities import Device
-from ...domain.interfaces import AppliedConfigStore
-from .schemas import DevicesFileSchema
-from .yaml_config_repository import YamlConfigRepository
+from ...domain.interfaces import AppliedConfigStore, ConfigRepository
+from .device_config_store import JsonDeviceConfigStore
+from .mapping import device_to_config, merge
 
-_SNAPSHOT_NAME = "applied_config.json"
+_SNAPSHOT_NAME = "current_config.json"
 
 
-class FileAppliedConfigStore(AppliedConfigStore):
-    """Persists the applied snapshot as JSON in the data directory."""
+class CurrentConfigStore(AppliedConfigStore):
+    """Persists the last-read configuration payload as JSON in the data dir."""
 
-    def __init__(self, data_dir: str | Path) -> None:
-        self._path = Path(data_dir) / _SNAPSHOT_NAME
+    def __init__(
+        self,
+        data_dir: str | Path,
+        profiles: ConfigRepository,
+        store: JsonDeviceConfigStore | None = None,
+    ) -> None:
+        self._store = store or JsonDeviceConfigStore(Path(data_dir) / _SNAPSHOT_NAME)
+        self._profiles = profiles
+
+    @property
+    def store(self) -> JsonDeviceConfigStore:
+        return self._store
 
     def load(self) -> list[Device]:
-        if not self._path.exists():
+        if not self._store.exists():
             return []
-        raw = json.loads(self._path.read_text(encoding="utf-8"))
-        schema = DevicesFileSchema.model_validate(raw)
-        return [YamlConfigRepository._to_device(d) for d in schema.devices]
+        configs = self._store.load()
+        return [merge(p, configs.get(p.id)) for p in self._profiles.list_devices()]
 
     def save(self, devices: list[Device]) -> None:
-        self._path.parent.mkdir(parents=True, exist_ok=True)
-        schema = DevicesFileSchema(
-            devices=[YamlConfigRepository._from_device(d) for d in devices]
-        )
-        payload = schema.model_dump(mode="json")
-        tmp = self._path.with_suffix(".json.tmp")
-        tmp.write_text(json.dumps(payload, indent=2), encoding="utf-8")
-        tmp.replace(self._path)
+        self._store.save_all({d.id: device_to_config(d) for d in devices})
+

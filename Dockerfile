@@ -23,9 +23,11 @@ ENV PYTHONUNBUFFERED=1 \
     SDNMAN_DATA_DIR=/data \
     SDNMAN_USE_MOCK_DEVICES=1 \
     SDNMAN_POLL_INTERVAL=30 \
-    SDNMAN_RETENTION_DAYS=30
+    SDNMAN_RETENTION_DAYS=30 \
+    SDNMAN_BASELINE_ON_START=1 \
+    SDNMAN_BROKER_SOCKET=/data/broker.sock
 
-# s6-overlay supervises the two long-running processes (web + poller) in a single
+# s6-overlay supervises the long-running processes (web + broker) in a single
 # container. Pinned; x86_64 only (adjust the arch tarball for other platforms).
 ARG S6_OVERLAY_VERSION=3.2.0.2
 ADD https://github.com/just-containers/s6-overlay/releases/download/v${S6_OVERLAY_VERSION}/s6-overlay-noarch.tar.xz /tmp/s6-overlay-noarch.tar.xz
@@ -49,12 +51,13 @@ RUN python -m pip install --no-cache-dir /tmp/*.whl gunicorn && rm -f /tmp/*.whl
 
 # Seed configuration baked into the image; copied into the volume on first run.
 COPY config /app/seed-config
-# s6-overlay service definitions (seed-config oneshot -> web + poller longruns).
+# s6-overlay service definitions (seed-config oneshot -> web + broker longruns,
+# baseline oneshot after the broker is up).
 COPY docker/s6-overlay/s6-rc.d /etc/s6-overlay/s6-rc.d
 COPY docker/s6-overlay/scripts/seed-config.sh /usr/local/bin/seed-config.sh
 RUN chmod +x /usr/local/bin/seed-config.sh \
     /etc/s6-overlay/s6-rc.d/web/run \
-    /etc/s6-overlay/s6-rc.d/poller/run \
+    /etc/s6-overlay/s6-rc.d/broker/run \
     && mkdir -p /data && chown -R appuser:appuser /data /app
 
 VOLUME ["/data"]

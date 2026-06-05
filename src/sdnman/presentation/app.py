@@ -1,8 +1,10 @@
 """Flask application factory.
 
-The web app is a pure reader of runtime state: a separate poller process
-(``sdnman-ctl poll-daemon``) is the sole writer of the runtime database. There
-is no in-process scheduler.
+The web app holds no device connections: a separate Device Broker process
+(``sdnman-ctl broker``) owns all device I/O and is the sole writer of the runtime
+database. The web app reads the latest runtime snapshot and proxies any
+configuration read/write to the broker over its Unix socket. There is no
+in-process scheduler.
 """
 
 from __future__ import annotations

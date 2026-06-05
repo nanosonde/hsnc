@@ -94,6 +94,21 @@ class DeviceConnection:
 
 
 @dataclass
+class MonitoringConfig:
+    """Optional secondary live-data source for a device.
+
+    The configuration plane is always SSH. This describes an *additional*
+    runtime/telemetry channel the Device Broker may open alongside the SSH
+    connection (e.g. an SNMPv3 agent or a Prometheus exporter over HTTP(S)).
+    ``type == "ssh"`` means runtime data is scraped over the same SSH plane;
+    ``type == "none"`` disables live data for the device.
+    """
+
+    type: str = "ssh"  # ssh | snmp | prometheus | none
+    endpoint: str = ""  # transport-specific target, e.g. "https://host:9100/metrics"
+
+
+@dataclass
 class Device:
     """A managed network device (gateway, switch or access point)."""
 
@@ -114,6 +129,8 @@ class Device:
     ssids: list[str] = field(default_factory=list)
     # optional SSH connection override (host/port/user); None -> derive from ip
     connection: DeviceConnection | None = None
+    # optional secondary live-data source (SNMP/Prometheus); None -> SSH scrape
+    monitoring: MonitoringConfig | None = None
 
 
 @dataclass

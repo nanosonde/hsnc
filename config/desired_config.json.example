@@ -1,0 +1,65 @@
+{
+  "devices": [
+    {
+      "id": "gateway-1",
+      "mac": "AC:1F:6B:A0:00:01",
+      "model": "TP-Link ER605 (OpenWrt)",
+      "firmware": "1.2.0",
+      "ports": [],
+      "vlans": [],
+      "ssids": []
+    },
+    {
+      "id": "switch-1",
+      "mac": "B0:4E:26:00:00:10",
+      "model": "TP-Link JetStream TL-SG2210P",
+      "firmware": "1.0.5",
+      "vlans": [
+        { "vlan_id": 1, "name": "Default", "subnet": "192.168.50.0/24" },
+        { "vlan_id": 10, "name": "Management", "subnet": "192.168.10.0/24" },
+        { "vlan_id": 20, "name": "Guest", "subnet": "192.168.20.0/24" }
+      ],
+      "ports": [
+        { "number": 1, "name": "Uplink", "mode": "trunk", "pvid": 1, "tagged_vlans": [1, 10, 20] },
+        { "number": 2, "name": "AP", "mode": "trunk", "pvid": 1, "tagged_vlans": [1, 20] },
+        { "number": 3, "name": "Controller", "mode": "access", "pvid": 10 },
+        { "number": 4, "name": "Desktop", "mode": "access", "pvid": 1 },
+        { "number": 5, "name": "", "mode": "access", "pvid": 1 },
+        { "number": 6, "name": "", "mode": "access", "pvid": 1 },
+        { "number": 7, "name": "", "enabled": false, "mode": "access", "pvid": 1 },
+        { "number": 8, "name": "", "enabled": false, "mode": "access", "pvid": 1 }
+      ],
+      "ssids": []
+    },
+    {
+      "id": "ap-1",
+      "mac": "10:27:F5:00:00:20",
+      "model": "TP-Link EAP245 (OpenWrt)",
+      "firmware": "5.0.4",
+      "ports": [],
+      "vlans": [],
+      "ssids": ["HomeNet", "HomeNet-Guest"]
+    },
+    {
+      "id": "switch-2",
+      "mac": "B0:B2:DC:00:00:30",
+      "model": "Zyxel GS1900-8 (OpenWrt DSA)",
+      "firmware": "23.05.3",
+      "vlans": [
+        { "vlan_id": 1, "name": "Default", "subnet": "192.168.50.0/24" },
+        { "vlan_id": 30, "name": "IoT", "subnet": "192.168.30.0/24" }
+      ],
+      "ports": [
+        { "number": 1, "name": "Uplink", "mode": "trunk", "pvid": 1, "tagged_vlans": [1, 30] },
+        { "number": 2, "name": "NAS", "mode": "access", "pvid": 1 },
+        { "number": 3, "name": "IoT-Hub", "mode": "access", "pvid": 30 },
+        { "number": 4, "name": "", "mode": "access", "pvid": 1 },
+        { "number": 5, "name": "", "mode": "access", "pvid": 1 },
+        { "number": 6, "name": "", "mode": "access", "pvid": 1 },
+        { "number": 7, "name": "", "enabled": false, "mode": "access", "pvid": 1 },
+        { "number": 8, "name": "", "enabled": false, "mode": "access", "pvid": 1 }
+      ],
+      "ssids": []
+    }
+  ]
+}

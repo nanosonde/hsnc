@@ -36,15 +36,12 @@ DEVICES_YAML = (
     "  - id: switch-1\n"
     "    name: SW\n"
     "    kind: switch\n"
-    "    mac: B0:4E:26:00:00:10\n"
     "    ip: 192.168.50.2\n"
-    "    vlans:\n"
-    "      - vlan_id: 10\n"
-    "        name: Mgmt\n"
-    "    ports:\n"
-    "      - number: 1\n"
-    "        mode: trunk\n"
-    "        pvid: 1\n"
+    "    connection:\n"
+    "      username: admin\n"
+    "      port: 22\n"
+    "    monitoring:\n"
+    "      type: ssh\n"
 )
 
 
@@ -63,8 +60,11 @@ def test_yaml_config_repository_reads(config_dir):
     device = repo.get_device("switch-1")
     assert device is not None
     assert device.kind is DeviceKind.SWITCH
-    assert device.vlans[0].vlan_id == 10
-    assert device.ports[0].mode.value == "trunk"
+    assert device.ip == IpAddress("192.168.50.2")
+    assert device.connection is not None
+    assert device.connection.username == "admin"
+    assert device.monitoring is not None
+    assert device.monitoring.type == "ssh"
 
 
 def test_yaml_config_archive_roundtrip(config_dir):

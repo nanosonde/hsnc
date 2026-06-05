@@ -147,7 +147,9 @@ class RuntimeStore(ABC):
     def record_device_status(self, device: Device, at: datetime) -> None: ...
 
     @abstractmethod
-    def record_client_session(self, client: Client, at: datetime) -> None: ...
+    def record_client_session(
+        self, client: Client, at: datetime, device_id: str = ""
+    ) -> None: ...
 
     @abstractmethod
     def record_association_failures(
@@ -156,6 +158,19 @@ class RuntimeStore(ABC):
 
     @abstractmethod
     def latest_association_failures(self) -> list[AssociationFailure]: ...
+
+    @abstractmethod
+    def latest_device_status(self, device: Device) -> Device:
+        """Return ``device`` enriched with its most recent recorded status.
+
+        When no snapshot has been recorded yet the device is returned marked
+        ``DeviceStatus.UNKNOWN``. This is the read path the web app uses instead
+        of scraping devices live.
+        """
+
+    @abstractmethod
+    def latest_clients(self, device: Device) -> list[Client]:
+        """Return the clients from the most recent snapshot for ``device``."""
 
     @abstractmethod
     def prune(self, cutoff: datetime) -> int:

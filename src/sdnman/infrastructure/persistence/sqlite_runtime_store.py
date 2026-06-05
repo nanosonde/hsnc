@@ -4,7 +4,7 @@ Stores time-series runtime data: device status snapshots, client sessions and
 association-failure counts. A tiny ``schema_version`` table drives forward-only
 migrations applied automatically at startup. Apply/audit history lives elsewhere
 (:class:`JsonlApplyHistoryStore`), so this database has a single writer (the
-poller) and can be pruned on a retention window.
+Device Broker) and can be pruned on a retention window.
 """
 
 from __future__ import annotations
@@ -20,9 +20,11 @@ from ...domain.entities import (
     Client,
     Device,
 )
+from ...domain.enums import ConnectionType, DeviceStatus
 from ...domain.interfaces import RuntimeStore
+from ...domain.value_objects import DataVolume, IpAddress, MacAddress
 
-SCHEMA_VERSION = 1
+SCHEMA_VERSION = 2
 
 _RUNTIME_TABLES = (
     "device_status",
@@ -59,8 +61,15 @@ class SqliteRuntimeStore(RuntimeStore):
             row = cur.execute("SELECT version FROM schema_version").fetchone()
             current = row["version"] if row else 0
 
+            if current >= SCHEMA_VERSION:
+                # Already current: do not write, so read-only consumers (the web
+                # process) never contend with the broker for the write lock.
+                return
+
             if current < 1:
                 self._apply_v1(cur)
+            if current < 2:
+                self._apply_v2(cur)
 
             cur.execute("DELETE FROM schema_version")
             cur.execute("INSERT INTO schema_version (version) VALUES (?)", (SCHEMA_VERSION,))
@@ -111,6 +120,22 @@ class SqliteRuntimeStore(RuntimeStore):
             """
         )
 
+    @staticmethod
+    def _apply_v2(cur: sqlite3.Cursor) -> None:
+        # Associate client sessions with their device and preserve enough fields
+        # to reconstruct a Client for the web read path (latest_clients).
+        existing = {row["name"] for row in cur.execute("PRAGMA table_info(client_session)")}
+        if "device_id" not in existing:
+            cur.execute("ALTER TABLE client_session ADD COLUMN device_id TEXT NOT NULL DEFAULT ''")
+        if "connection" not in existing:
+            cur.execute("ALTER TABLE client_session ADD COLUMN connection TEXT NOT NULL DEFAULT ''")
+        if "ap_or_port" not in existing:
+            cur.execute("ALTER TABLE client_session ADD COLUMN ap_or_port TEXT NOT NULL DEFAULT ''")
+        cur.execute(
+            "CREATE INDEX IF NOT EXISTS idx_client_session_device "
+            "ON client_session (device_id, recorded_at)"
+        )
+
     # -- RuntimeStore -----------------------------------------------------
 
     def record_device_status(self, device: Device, at: datetime) -> None:
@@ -131,13 +156,15 @@ class SqliteRuntimeStore(RuntimeStore):
             )
             self._conn.commit()
 
-    def record_client_session(self, client: Client, at: datetime) -> None:
+    def record_client_session(
+        self, client: Client, at: datetime, device_id: str = ""
+    ) -> None:
         with self._lock:
             self._conn.execute(
                 "INSERT INTO client_session "
                 "(recorded_at, client_id, name, mac, ip, status, network, ssid, "
-                "rx_bytes, tx_bytes, uptime_secs) "
-                "VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)",
+                "rx_bytes, tx_bytes, uptime_secs, device_id, connection, ap_or_port) "
+                "VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)",
                 (
                     at.isoformat(),
                     client.id,
@@ -150,6 +177,9 @@ class SqliteRuntimeStore(RuntimeStore):
                     client.downloaded.bytes,
                     client.uploaded.bytes,
                     client.uptime_seconds,
+                    device_id,
+                    client.connection.value,
+                    client.ap_or_port,
                 ),
             )
             self._conn.commit()
@@ -178,6 +208,61 @@ class SqliteRuntimeStore(RuntimeStore):
                 (row["recorded_at"],),
             ).fetchall()
         return [AssociationFailure(r["category"], r["count"]) for r in rows]
+
+    # -- web read path ----------------------------------------------------
+
+    def latest_device_status(self, device: Device) -> Device:
+        from dataclasses import replace
+
+        with self._lock:
+            row = self._conn.execute(
+                "SELECT status, ip, uptime_secs FROM device_status "
+                "WHERE device_id = ? ORDER BY recorded_at DESC LIMIT 1",
+                (device.id,),
+            ).fetchone()
+        if row is None:
+            return replace(device, status=DeviceStatus.UNKNOWN)
+        return replace(
+            device,
+            status=DeviceStatus(row["status"]),
+            ip=IpAddress(row["ip"]) if row["ip"] else device.ip,
+            uptime_seconds=int(row["uptime_secs"] or 0),
+        )
+
+    def latest_clients(self, device: Device) -> list[Client]:
+        with self._lock:
+            latest = self._conn.execute(
+                "SELECT recorded_at FROM client_session "
+                "WHERE device_id = ? ORDER BY recorded_at DESC LIMIT 1",
+                (device.id,),
+            ).fetchone()
+            if latest is None:
+                return []
+            rows = self._conn.execute(
+                "SELECT * FROM client_session WHERE device_id = ? AND recorded_at = ?",
+                (device.id, latest["recorded_at"]),
+            ).fetchall()
+        return [self._row_to_client(r, device) for r in rows]
+
+    @staticmethod
+    def _row_to_client(row: sqlite3.Row, device: Device) -> Client:
+        keys = row.keys()
+        connection = row["connection"] if "connection" in keys and row["connection"] else None
+        return Client(
+            id=row["client_id"],
+            name=row["name"],
+            mac=MacAddress(row["mac"]),
+            connection=ConnectionType(connection) if connection else ConnectionType.WIRED,
+            status=DeviceStatus(row["status"]),
+            ip=IpAddress(row["ip"]) if row["ip"] else None,
+            network=row["network"] or "LAN",
+            ssid=row["ssid"] or "",
+            ap_or_port=(row["ap_or_port"] if "ap_or_port" in keys else "") or device.name,
+            downloaded=DataVolume(int(row["rx_bytes"] or 0)),
+            uploaded=DataVolume(int(row["tx_bytes"] or 0)),
+            uptime_seconds=int(row["uptime_secs"] or 0),
+            site_id=device.site_id,
+        )
 
     # -- retention --------------------------------------------------------
 

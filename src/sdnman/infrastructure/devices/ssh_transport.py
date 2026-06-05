@@ -19,6 +19,7 @@ from __future__ import annotations
 
 import os
 import re
+import threading
 import time
 from abc import ABC, abstractmethod
 from collections.abc import Callable, Sequence
@@ -216,6 +217,111 @@ RunnerFactory = Callable[[SshTarget], SshCommandRunner]
 def default_runner_factory(target: SshTarget) -> SshCommandRunner:
     """Default runner factory: a real paramiko-backed runner."""
     return ParamikoSshRunner(target)
+
+
+class PersistentSshRunner(ParamikoSshRunner):
+    """Long-lived, thread-safe SSH runner for the Device Broker.
+
+    Unlike :class:`ParamikoSshRunner` (which connects per use and closes on
+    ``__exit__``), this keeps a single SSH connection open across calls and
+    transparently reconnects after a dropped connection. A lock serialises
+    access so the broker's keepalive thread and on-demand command calls never
+    use the channel concurrently.
+
+    The context-manager protocol is a no-op on exit so adapters written as
+    ``with runner: ...`` reuse the persistent connection instead of closing it.
+    """
+
+    def __init__(self, target: SshTarget) -> None:
+        super().__init__(target)
+        self._op_lock = threading.RLock()
+
+    def __enter__(self) -> PersistentSshRunner:
+        return self
+
+    def __exit__(self, *exc_info: object) -> None:
+        # Keep the connection open; the broker owns its lifecycle.
+        return None
+
+    def ensure_connected(self) -> None:
+        """Open the connection if needed; raises :class:`SshError` on failure."""
+        with self._op_lock:
+            self._connect()
+
+    def is_alive(self) -> bool:
+        with self._op_lock:
+            client = self._client
+            if client is None:
+                return False
+            transport = client.get_transport()
+            return bool(transport and transport.is_active())
+
+    def keepalive(self) -> bool:
+        """Best-effort liveness probe; returns True if the connection is healthy."""
+        with self._op_lock:
+            try:
+                self._connect()
+                transport = self._client.get_transport() if self._client else None
+                if transport is None or not transport.is_active():
+                    raise SshError("transport not active")
+                transport.send_ignore()
+                return True
+            except Exception:  # noqa: BLE001 - liveness probe never raises
+                self.close()
+                return False
+
+    def run(self, command: str) -> str:
+        with self._op_lock:
+            try:
+                return super().run(command)
+            except SshError:
+                # One transparent reconnect, then retry once.
+                self.close()
+                return super().run(command)
+
+    def run_shell(self, commands: Sequence[str]) -> str:
+        with self._op_lock:
+            try:
+                return super().run_shell(commands)
+            except SshError:
+                self.close()
+                return super().run_shell(commands)
+
+
+class PersistentRunnerRegistry:
+    """Caches one :class:`PersistentSshRunner` per resolved target.
+
+    Used as a :data:`RunnerFactory` so device adapters transparently reuse the
+    broker's warm connections. Keyed by the connection tuple so repeated
+    resolutions of the same device share a single connection.
+    """
+
+    def __init__(self) -> None:
+        self._runners: dict[tuple[str, int, str], PersistentSshRunner] = {}
+        self._lock = threading.Lock()
+
+    @staticmethod
+    def _key(target: SshTarget) -> tuple[str, int, str]:
+        return (target.host, target.port, target.username)
+
+    def get(self, target: SshTarget) -> PersistentSshRunner:
+        with self._lock:
+            key = self._key(target)
+            runner = self._runners.get(key)
+            if runner is None:
+                runner = PersistentSshRunner(target)
+                self._runners[key] = runner
+            return runner
+
+    def all_runners(self) -> list[PersistentSshRunner]:
+        with self._lock:
+            return list(self._runners.values())
+
+    def close_all(self) -> None:
+        with self._lock:
+            for runner in self._runners.values():
+                runner.close()
+            self._runners.clear()
 
 
 @dataclass(frozen=True)

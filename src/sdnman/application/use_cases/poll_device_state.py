@@ -39,7 +39,7 @@ class PollDeviceState:
         for device in devices:
             self._runtime.record_device_status(device, now)
             for client in self._network.clients_for(device):
-                self._runtime.record_client_session(client, now)
+                self._runtime.record_client_session(client, now, device.id)
 
         # Association failures are currently derived as empty buckets; real
         # adapters will surface counts. Persist the buckets so history exists.

@@ -1,4 +1,4 @@
-"""Tests for editing config and writing it back to YAML (with backups)."""
+"""Tests for editing config and writing it back to the desired-config store."""
 
 from __future__ import annotations
 
@@ -6,7 +6,6 @@ import shutil
 from pathlib import Path
 
 import pytest
-import yaml
 
 from sdnman.application.use_cases.edit_device_config import (
     ConfigEditError,
@@ -14,6 +13,10 @@ from sdnman.application.use_cases.edit_device_config import (
     SavePort,
     SaveSsids,
     SaveVlan,
+)
+from sdnman.infrastructure.config.device_config_store import JsonDeviceConfigStore
+from sdnman.infrastructure.config.layered_config_repository import (
+    LayeredConfigRepository,
 )
 from sdnman.infrastructure.config.yaml_config_repository import (
     YamlConfigRepository,
@@ -23,7 +26,7 @@ _PROJECT_CONFIG = Path(__file__).resolve().parents[1] / "config"
 
 
 @pytest.fixture
-def repo(tmp_path) -> YamlConfigRepository:
+def repo(tmp_path) -> LayeredConfigRepository:
     config_dir = tmp_path / "config"
     shutil.copytree(_PROJECT_CONFIG, config_dir)
     # Tests run against the committed sample inventory, not any local trial
@@ -32,23 +35,20 @@ def repo(tmp_path) -> YamlConfigRepository:
         _PROJECT_CONFIG / "devices.yaml.example", config_dir / "devices.yaml"
     )
     backup_dir = tmp_path / "config-backups"
-    return YamlConfigRepository(config_dir, backup_dir=backup_dir)
+    profiles = YamlConfigRepository(config_dir, backup_dir=backup_dir)
+    desired_path = tmp_path / "desired_config.json"
+    shutil.copyfile(
+        _PROJECT_CONFIG / "desired_config.json.example", desired_path
+    )
+    desired = JsonDeviceConfigStore(desired_path)
+    return LayeredConfigRepository(profiles, desired)
 
 
-def _devices_yaml(repo: YamlConfigRepository) -> dict:
-    path = repo.config_dir / "devices.yaml"
-    return yaml.safe_load(path.read_text())
-
-
-def test_save_vlan_writes_yaml_and_backs_up(repo, tmp_path):
+def test_save_vlan_persisted(repo):
     SaveVlan(repo, repo).execute("switch-1", vlan_id=99, name="Guest", subnet="")
 
-    data = _devices_yaml(repo)
-    switch = next(d for d in data["devices"] if d["id"] == "switch-1")
-    assert any(v["vlan_id"] == 99 and v["name"] == "Guest" for v in switch["vlans"])
-
-    backups = list((tmp_path / "config-backups").glob("*/devices.yaml"))
-    assert backups, "expected a timestamped backup of devices.yaml"
+    reloaded = repo.get_device("switch-1")
+    assert any(v.vlan_id == 99 and v.name == "Guest" for v in reloaded.vlans)
 
 
 def test_save_vlan_rejects_invalid_id(repo):
@@ -60,10 +60,9 @@ def test_save_vlan_accepts_valid_cidr_subnet(repo):
     SaveVlan(repo, repo).execute(
         "switch-1", vlan_id=42, name="Lab", subnet="192.168.42.0/24"
     )
-    data = _devices_yaml(repo)
-    switch = next(d for d in data["devices"] if d["id"] == "switch-1")
+    reloaded = repo.get_device("switch-1")
     assert any(
-        v["vlan_id"] == 42 and v["subnet"] == "192.168.42.0/24" for v in switch["vlans"]
+        v.vlan_id == 42 and v.subnet == "192.168.42.0/24" for v in reloaded.vlans
     )
 
 
@@ -117,3 +116,34 @@ def test_save_ssids_roundtrip(repo):
     SaveSsids(repo, repo).execute("ap-1", ["Corp", "Guest"])
     reloaded = repo.get_device("ap-1")
     assert reloaded.ssids == ["Corp", "Guest"]
+
+
+def test_backup_roundtrip_preserves_layered_config(tmp_path):
+    """The layered archive must carry desired_config.json and current_config.json."""
+    config_dir = tmp_path / "config"
+    shutil.copytree(_PROJECT_CONFIG, config_dir)
+    shutil.copyfile(
+        _PROJECT_CONFIG / "devices.yaml.example", config_dir / "devices.yaml"
+    )
+    profiles = YamlConfigRepository(config_dir, backup_dir=tmp_path / "backups")
+    desired_path = tmp_path / "desired_config.json"
+    current_path = tmp_path / "current_config.json"
+    shutil.copyfile(_PROJECT_CONFIG / "desired_config.json.example", desired_path)
+    shutil.copyfile(_PROJECT_CONFIG / "desired_config.json.example", current_path)
+    desired = JsonDeviceConfigStore(desired_path)
+    current = JsonDeviceConfigStore(current_path)
+    repo = LayeredConfigRepository(profiles, desired, current)
+
+    # stage an edit so desired diverges from the seed
+    SaveVlan(repo, repo).execute("switch-1", vlan_id=77, name="Backup", subnet="")
+    files = repo.export_files()
+    assert "desired_config.json" in files
+    assert "current_config.json" in files
+
+    # wipe both JSON stores, then restore from the archive
+    desired_path.write_text("{}")
+    current_path.write_text("{}")
+    repo.import_files(files)
+
+    reloaded = repo.get_device("switch-1")
+    assert any(v.vlan_id == 77 and v.name == "Backup" for v in reloaded.vlans)

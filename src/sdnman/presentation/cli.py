@@ -1,4 +1,4 @@
-"""Command-line interface: run the dev server, the poller and manage backups."""
+"""Command-line interface: run the dev server, the broker and manage backups."""
 
 from __future__ import annotations
 
@@ -10,11 +10,12 @@ from pathlib import Path
 
 import click
 
+from ..infrastructure.broker.service import BrokerService
 from ..infrastructure.container import Container
 from .app import create_app
 from .settings import settings_from_env
 
-_log = logging.getLogger("sdnman.poller")
+_log = logging.getLogger("sdnman.cli")
 
 
 @click.group()
@@ -35,10 +36,10 @@ def serve(host: str, port: int, debug: bool) -> None:
 
 @main.command()
 def poll() -> None:
-    """Run a single device poll sweep and exit (one-shot)."""
+    """Run a single device poll sweep and exit (one-shot, broker profile)."""
 
     logging.basicConfig(level=logging.INFO, format="%(asctime)s %(levelname)s %(message)s")
-    container = Container(settings_from_env())
+    container = Container(settings_from_env(), profile="broker")
     try:
         count = container.poll_device_state.execute()
         _log.info("Polled %d devices", count)
@@ -46,41 +47,73 @@ def poll() -> None:
         container.close()
 
 
-@main.command("poll-daemon")
-def poll_daemon() -> None:
-    """Continuously poll devices on the configured interval (the poller process)."""
+@main.command()
+def broker() -> None:
+    """Run the Device Broker: own all device connections and serve the IPC API."""
 
     logging.basicConfig(level=logging.INFO, format="%(asctime)s %(levelname)s %(message)s")
     settings = settings_from_env()
-    container = Container(settings)
-    interval = settings.poll_interval_seconds
-
-    stopping = False
+    service = BrokerService(settings)
 
     def _stop(signum, _frame):  # type: ignore[no-untyped-def]
-        nonlocal stopping
-        stopping = True
-        _log.info("Received signal %s, shutting down poller", signum)
+        _log.info("Received signal %s, shutting down broker", signum)
+        service.stop()
 
     signal.signal(signal.SIGTERM, _stop)
     signal.signal(signal.SIGINT, _stop)
 
-    _log.info("Poller started (interval=%ss, retention=%sd)", interval, settings.retention_days)
+    service.start()
     try:
-        while not stopping:
-            try:
-                count = container.poll_device_state.execute()
-                _log.info("Polled %d devices", count)
-            except Exception:  # noqa: BLE001 - never let one sweep kill the loop
-                _log.exception("Poll sweep failed")
-            # Sleep in short slices so signals are handled promptly.
-            slept = 0.0
-            while slept < interval and not stopping:
-                time.sleep(min(1.0, interval - slept))
-                slept += 1.0
+        service.run()
+    finally:
+        service.stop()
+
+
+@main.command()
+def baseline() -> None:
+    """Read the live configuration from all devices and record it as the baseline.
+
+    Runs through the broker (web profile), so the broker must be up. No-op when
+    SDNMAN_BASELINE_ON_START is disabled.
+    """
+
+    logging.basicConfig(level=logging.INFO, format="%(asctime)s %(levelname)s %(message)s")
+    settings = settings_from_env()
+    if not settings.baseline_on_start:
+        _log.info("Baseline disabled (SDNMAN_BASELINE_ON_START=0); skipping")
+        return
+    if not _wait_for_broker(settings.broker_socket):
+        _log.warning("Broker not reachable; skipping baseline read")
+        return
+    container = Container(settings, profile="web")
+    try:
+        result = container.read_baseline.execute()
+        seeded = container.seed_desired_from_current()
+        _log.info(
+            "Baseline: read %d device(s), %d failure(s), changed=%s, seeded_desired=%s",
+            len(result.read),
+            len(result.failures),
+            result.changed,
+            seeded,
+        )
     finally:
         container.close()
-        _log.info("Poller stopped")
+
+
+def _wait_for_broker(socket_path, attempts: int = 30, delay: float = 1.0) -> bool:
+    """Poll the broker's health endpoint until it answers or attempts run out."""
+    from ..infrastructure.broker.client import BrokerClient, BrokerUnavailableError
+
+    client = BrokerClient(socket_path, timeout=5.0)
+    for _ in range(attempts):
+        try:
+            client.health()
+            return True
+        except BrokerUnavailableError:
+            time.sleep(delay)
+    return False
+
+
 
 
 @main.group()

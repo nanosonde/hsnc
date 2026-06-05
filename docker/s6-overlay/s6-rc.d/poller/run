@@ -1,5 +1,0 @@
-#!/command/with-contenv sh
-# Poller service: sole writer of runtime.db. Polls the monitoring plane on an
-# interval (SDNMAN_POLL_INTERVAL) and prunes rows older than SDNMAN_RETENTION_DAYS.
-exec /command/s6-setuidgid appuser \
-  sdnman-ctl poll-daemon

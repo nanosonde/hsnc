@@ -10,7 +10,7 @@ access points** and **JetStream managed switches** (with VLANs).
 - **Apply history:** append-only JSONL
 - **Backup:** export/import a single ZIP (config + runtime + history)
 - **Architecture:** Clean Architecture (domain / application / infrastructure / presentation)
-- **Packaging:** Docker container running two supervised processes (web + poller) via s6-overlay
+- **Packaging:** Docker container running supervised processes (web + Device Broker) via s6-overlay
 
 > **Status:** By default the runtime/monitoring plane is served by a built-in
 > **mock provider**, so the UI is fully usable without hardware. VLAN, port and
@@ -36,18 +36,23 @@ concrete implementations to the abstract ports.
 
 ### Config plane vs monitoring plane
 
-Device access is split into two independent planes:
+Device access is split into two independent planes, and **all device I/O happens
+in the Device Broker, never in a web request** (see *Processes & storage*):
 
 - **Config plane (SSH only).** A `DeviceAdapter` (`supports` / `fetch_config` /
   `push_config`) reads and writes declarative configuration over SSH only —
   OpenWrt UCI and JetStream CLI. SSH is never used for anything but configuration.
 - **Monitoring plane (pluggable).** A `MonitoringProvider`
   (`fetch_status` / `fetch_clients`) supplies runtime data. The provider is
-  selected per device by a `MonitoringProviderFactory`. Today the shipped
+  selected per device by a `MonitoringProviderFactory`. In the broker the shipped
   providers are an **SSH-scrape fallback** (OpenWrt `ubus`, JetStream CLI), a
   **mock** provider (demo data), and a **null** provider. Richer sources
   (Prometheus node/OpenWrt exporter, SNMPv3 for switches) are intended future
   providers that slot in behind the same port without touching the config plane.
+
+The **web process** never opens either plane directly: it reads the latest
+monitoring snapshot from the runtime database and proxies any configuration
+read/write to the broker over a Unix socket.
 
 If a device has no working runtime source (e.g. a JetStream switch with no SNMP
 provider yet), it simply reports **no runtime data** rather than failing.
@@ -66,23 +71,37 @@ A failed poll for one device never affects the others or the web UI.
 
 ### Processes & storage
 
-The container runs **two processes** under s6-overlay that share `/data`:
+The container runs **two long-running processes** under s6-overlay that share
+`/data`, plus a one-shot baseline step:
 
-- **web** (`gunicorn`) — serves the UI and is the **only writer** of the apply
-  history (`history.jsonl`). It is a pure **reader** of the runtime database.
-- **poller** (`sdnman-ctl poll-daemon`) — the **only writer** of the runtime
-  database (`runtime.db`, SQLite in WAL mode). On each cycle it records a snapshot
-  and prunes rows older than `SDNMAN_RETENTION_DAYS`.
+- **web** (`gunicorn`) — serves the UI. It holds **no device connections**: it
+  reads the runtime database and proxies configuration reads/writes to the
+  broker. It is the only writer of the apply history (`history.jsonl`) and of the
+  staged configuration (`desired_config.json`).
+- **Device Broker** (`sdnman-ctl broker`) — the always-on owner of **all device
+  I/O**. It keeps a persistent SSH connection warm to every device (each on its
+  own thread, reconnecting independently on loss), serves the Unix-socket IPC API
+  the web app calls, and is the **only writer** of the runtime database
+  (`runtime.db`, SQLite in WAL mode) and the baseline (`current_config.json`). On
+  each poll cycle it records a snapshot and prunes rows older than
+  `SDNMAN_RETENTION_DAYS`.
+- **baseline** (`sdnman-ctl baseline`, one-shot) — after the broker is up, reads
+  the live configuration from every device into `current_config.json` and records
+  an `action="baseline"` event in the history, so the starting point is visible
+  and survives restarts. Gated by `SDNMAN_BASELINE_ON_START` (default on).
 
-This single-writer-per-store split is why history lives in JSONL and runtime in
-SQLite — neither process contends with the other for writes.
+Keeping connections in the broker — warm and out of the request path — is what
+makes the web UI fast: an unreachable device can never slow down or block a page.
+The single-writer-per-store split (history/desired in the web, runtime/baseline
+in the broker) means neither process contends with the other for writes.
 
 ## CLI
 
 ```bash
 sdnman-ctl serve            # run the web app (development)
-sdnman-ctl poll             # run one poll cycle and exit
-sdnman-ctl poll-daemon      # run the polling loop (used by the container)
+sdnman-ctl broker           # run the Device Broker (owns device I/O; used by the container)
+sdnman-ctl baseline         # read the live baseline from all devices (needs the broker)
+sdnman-ctl poll             # run one poll cycle and exit (broker profile)
 sdnman-ctl backup export ./backup.zip
 sdnman-ctl backup import ./backup.zip
 ```
@@ -96,7 +115,8 @@ docker compose up --build
 
 Default logins (change immediately): `admin` / `admin` and `viewer` / `viewer`.
 
-Data (YAML config, `runtime.db` and `history.jsonl`) persists in the
+Data (YAML config, `desired_config.json`, `current_config.json`, `runtime.db`,
+`history.jsonl` and the broker socket `broker.sock`) persists in the
 `controller-data` Docker volume.
 
 ## Quick start (local dev)
@@ -174,8 +194,18 @@ YAML files live in `SDNMAN_CONFIG_DIR` (default `./config`, or `/data/config` in
 | ---------------------- | ----------------------------------------- |
 | `site.yaml`            | Single site definition                    |
 | `users.yaml`           | Controller users (hashed passwords, roles)|
-| `devices.yaml`         | Declarative device inventory (incl. VLANs)|
+| `devices.yaml`         | Device inventory — **connection profiles only** (how to reach each device) |
 | `devices.yaml.example` | Template inventory; copy to `devices.yaml`|
+
+`devices.yaml` holds only *how to reach* each device (id, name, kind, site, IP,
+SSH `connection` block and optional `monitoring` block). The actual device
+configuration (VLANs, ports, SSIDs, model/firmware) is **not** stored in YAML:
+
+- **`desired_config.json`** (in `SDNMAN_DATA_DIR`) — the staged/intended
+  configuration written by the web app. Reads merge it onto the connection
+  profile from `devices.yaml`.
+- **`current_config.json`** (in `SDNMAN_DATA_DIR`) — the last configuration read
+  back from the devices by the broker (the baseline / live state).
 
 `devices.yaml` is environment-specific and ignored by git. Create it from the
 shipped template before running locally:
@@ -192,11 +222,12 @@ from the baked-in template on first run if one does not already exist.
 | Variable                  | Default | Description                              |
 | ------------------------- | ------- | ---------------------------------------- |
 | `SDNMAN_CONFIG_DIR`        | `config`| Path to YAML config directory            |
-| `SDNMAN_DATA_DIR`          | `data`  | Path to runtime data directory (`runtime.db`, `history.jsonl`) |
+| `SDNMAN_DATA_DIR`          | `data`  | Path to runtime data directory (`desired_config.json`, `current_config.json`, `runtime.db`, `history.jsonl`, `broker.sock`) |
 | `SDNMAN_USE_MOCK_DEVICES`  | `1`     | `1` mock providers, `0` real SSH drivers |
-| `SDNMAN_POLL_INTERVAL`     | `30`    | Poller cycle interval (seconds)          |
+| `SDNMAN_POLL_INTERVAL`     | `30`    | Broker poll-cycle interval (seconds)     |
 | `SDNMAN_RETENTION_DAYS`    | `30`    | Drop runtime rows older than N days (`0` disables pruning) |
-| `SDNMAN_MONITOR_CACHE_TTL` | `30`    | Web caches live device status/clients for N seconds so browsing does not re-SSH every page load (`0` disables) |
+| `SDNMAN_BASELINE_ON_START` | `1`     | `1` read each device's live config into `current_config.json` at startup and record it as the history baseline; `0` skip |
+| `SDNMAN_BROKER_SOCKET`     | `<data>/broker.sock` | Unix socket the broker listens on and the web app dials |
 | `SDNMAN_SECRET_KEY`        | `dev-insecure-change-me` | Flask session secret (set in production) |
 
 #### Real-device SSH (when `SDNMAN_USE_MOCK_DEVICES=0`)
@@ -212,7 +243,7 @@ Passwords are resolved only from the environment and are never stored in
 | `SDNMAN_JETSTREAM_SSH_PASSWORD`   | `admin`        | Effective fallback password for JetStream switches (the env var itself is unset; `admin` is applied when no per-device password is set) |
 | `SDNMAN_DEVICE_<ID>_PASSWORD`     | _(unset)_      | Per-device password (id upper-cased, non-alnum → `_`); takes precedence over the platform fallback |
 
-Per-device host, port and username come from an optional `connection` block in
+Per-device host, port and username come from the `connection` block in
 `config/devices.yaml`:
 
 ```yaml

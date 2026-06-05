@@ -95,12 +95,18 @@ class FakeRuntimeStore(RuntimeStore):
         self.device_status: list[tuple[str, str]] = []
         self.client_sessions: list[tuple[str, str]] = []
         self.failures: list[AssociationFailure] = []
+        self._latest_status: dict[str, Device] = {}
+        self._latest_clients: dict[str, list[Client]] = {}
 
     def record_device_status(self, device: Device, at: datetime) -> None:
         self.device_status.append((device.id, at.isoformat()))
+        self._latest_status[device.id] = device
 
-    def record_client_session(self, client: Client, at: datetime) -> None:
+    def record_client_session(
+        self, client: Client, at: datetime, device_id: str = ""
+    ) -> None:
         self.client_sessions.append((client.id, at.isoformat()))
+        self._latest_clients.setdefault(device_id, []).append(client)
 
     def record_association_failures(
         self, failures: Iterable[AssociationFailure], at: datetime
@@ -109,6 +115,12 @@ class FakeRuntimeStore(RuntimeStore):
 
     def latest_association_failures(self) -> list[AssociationFailure]:
         return list(self.failures)
+
+    def latest_device_status(self, device: Device) -> Device:
+        return self._latest_status.get(device.id, device)
+
+    def latest_clients(self, device: Device) -> list[Client]:
+        return list(self._latest_clients.get(device.id, []))
 
     def prune(self, cutoff: datetime) -> int:
         return 0
