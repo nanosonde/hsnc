@@ -13,10 +13,11 @@ SRC_DIRS      := src tests
 SMOKE_TEST    := mocks/smoke_test.sh
 MOCKS_COMPOSE := mocks/docker-compose.yml
 DOCKER        ?= docker
+IMAGE         ?= sdn-manager:latest
 
 .DEFAULT_GOAL := help
 
-.PHONY: help check lint unit integration test all clean mocks-up mocks-down
+.PHONY: help check lint unit integration test all clean mocks-up mocks-down docker-build docker-clean
 
 help: ## Show this help.
 	@echo "sdn-manager make targets:"
@@ -41,6 +42,12 @@ mocks-up: ## Build and start the mock SSH device containers (detached).
 
 mocks-down: ## Stop and remove the mock SSH device containers and their volumes.
 	$(DOCKER) compose -f $(MOCKS_COMPOSE) down -v
+
+docker-build: ## Build the application Docker image (override name with IMAGE=...).
+	$(DOCKER) build -t $(IMAGE) .
+
+docker-clean: ## Remove the application Docker image.
+	-$(DOCKER) image rm $(IMAGE)
 
 test: unit integration ## Run all tests (unit + integration).
 
