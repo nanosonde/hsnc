@@ -127,6 +127,19 @@ pip install -e ".[dev]"
 sdnman-ctl serve --debug          # http://localhost:8080
 ```
 
+The dashboard, device list and client views work from `serve` alone (they read
+the runtime database and the config files). Reading a device's live config or
+applying changes goes through the Device Broker, so for the full workflow run it
+alongside the web app in a second shell:
+
+```bash
+sdnman-ctl broker                 # owns device I/O; serves /data/broker.sock
+sdnman-ctl baseline               # optional: record the startup baseline
+```
+
+In mock mode (`SDNMAN_USE_MOCK_DEVICES=1`, the default) the broker uses the demo
+providers, so no real hardware is needed.
+
 ## Developer tasks
 
 A [`Makefile`](Makefile) wraps the common workflows (run `make help` for the full
