@@ -7,6 +7,7 @@
 # automatically on first run if one is not already present.
 #
 # kind: gateway | switch | access_point
+# switch port mode: access | trunk | hybrid
 devices:
   - id: gateway-1
     name: ER605

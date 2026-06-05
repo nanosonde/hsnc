@@ -45,7 +45,7 @@ Config mode:
 | `hostname <name>` | rename the switch (changes the prompt) |
 | `vlan <id>` / `name <text>` / `exit` | create/select a VLAN and name it |
 | `interface gigabitEthernet 1/0/<n>` | select a port |
-| `switchport mode access\|trunk\|general\|hybrid` | set port mode |
+| `switchport mode access\|trunk\|general\|hybrid` | set port mode (the controller models only `access`/`trunk`/`hybrid`; a port read back in `general` mode is reported as `trunk`) |
 | `switchport access vlan <id>` | access VLAN (also sets pvid) |
 | `switchport general allowed vlan 1,10,20` | tagged/allowed VLAN set |
 | `switchport pvid <id>` | set native/PVID |

@@ -122,6 +122,7 @@ make all          # check + lint + test
 make mocks-up     # build & start the mock SSH devices (detached)
 make mocks-down   # stop and remove the mock devices
 make docker-build # build the production image
+make docker-clean # remove the production image
 ```
 
 The targets use the project virtualenv (`.venv`) automatically when present;
@@ -196,7 +197,7 @@ from the baked-in template on first run if one does not already exist.
 | `SDNMAN_POLL_INTERVAL`     | `30`    | Poller cycle interval (seconds)          |
 | `SDNMAN_RETENTION_DAYS`    | `30`    | Drop runtime rows older than N days (`0` disables pruning) |
 | `SDNMAN_MONITOR_CACHE_TTL` | `30`    | Web caches live device status/clients for N seconds so browsing does not re-SSH every page load (`0` disables) |
-| `SDNMAN_SECRET_KEY`        | dev key | Flask session secret (set in production) |
+| `SDNMAN_SECRET_KEY`        | `dev-insecure-change-me` | Flask session secret (set in production) |
 
 #### Real-device SSH (when `SDNMAN_USE_MOCK_DEVICES=0`)
 
@@ -207,9 +208,9 @@ Passwords are resolved only from the environment and are never stored in
 | --------------------------------- | -------------- | ----------------------------------------------------- |
 | `SDNMAN_SSH_HOST_OVERRIDE`        | _(unset)_      | Force a host/IP for every device (e.g. `127.0.0.1`)   |
 | `SDNMAN_SSH_ACCEPT_UNKNOWN_HOSTS` | `1`            | `1` auto-accept unknown host keys, `0` reject         |
-| `SDNMAN_OPENWRT_SSH_PASSWORD`     | `openwrt`      | Default password for OpenWrt devices                  |
-| `SDNMAN_JETSTREAM_SSH_PASSWORD`   | `admin`        | Default password for JetStream switches               |
-| `SDNMAN_DEVICE_<ID>_PASSWORD`     | _(unset)_      | Per-device password (id upper-cased, non-alnum → `_`) |
+| `SDNMAN_OPENWRT_SSH_PASSWORD`     | `openwrt`      | Effective fallback password for OpenWrt devices (the env var itself is unset; `openwrt` is applied when no per-device password is set) |
+| `SDNMAN_JETSTREAM_SSH_PASSWORD`   | `admin`        | Effective fallback password for JetStream switches (the env var itself is unset; `admin` is applied when no per-device password is set) |
+| `SDNMAN_DEVICE_<ID>_PASSWORD`     | _(unset)_      | Per-device password (id upper-cased, non-alnum → `_`); takes precedence over the platform fallback |
 
 Per-device host, port and username come from an optional `connection` block in
 `config/devices.yaml`:
