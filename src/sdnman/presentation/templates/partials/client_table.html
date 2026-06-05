@@ -27,6 +27,9 @@
 </div>
 
 <div class="pagination">
+  {# Pagination uses HTMX too: clicking a page GETs that page and replaces the
+     #client-table container with the fresh partial. hx-get = URL to fetch,
+     hx-target = element to swap with the response. #}
   <span>Showing {{ paged.rows|length }} of {{ paged.total }} records</span>
   <div class="pages">
     <span class="page {% if paged.page <= 1 %}disabled{% endif %}"

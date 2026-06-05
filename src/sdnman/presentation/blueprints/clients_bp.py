@@ -25,5 +25,8 @@ def index():
     page_size = _parse_int(request.args.get("page_size"), 10)
     paged = container.list_clients.execute(search=search, page=page, page_size=page_size)
 
+    # HTMX requests carry an "HX-Request" header. For those we return just the
+    # table fragment so HTMX can swap it into #client-table; a normal browser
+    # navigation gets the full page. Both render from the same data.
     template = "partials/client_table.html" if request.headers.get("HX-Request") else "clients.html"
     return render_template(template, paged=paged, search=search, active="clients")

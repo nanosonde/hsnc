@@ -11,11 +11,12 @@ access points** and **JetStream managed switches** (with VLANs).
 - **Architecture:** Clean Architecture (domain / application / infrastructure / presentation)
 - **Packaging:** Docker container served over HTTP via gunicorn
 
-> **MVP status:** Devices are served by a built-in **mock adapter** so the UI is
-> fully usable without hardware. VLAN, port and wireless editing plus the
-> review/apply workflow are implemented end-to-end against the mock adapter.
-> Real device drivers (OpenWrt SSH/UCI, JetStream SSH/CLI) are present as
-> interface-conformant **stubs** and slot in without touching the inner layers.
+> **Status:** By default devices are served by a built-in **mock adapter**, so the
+> UI is fully usable without hardware. VLAN, port and wireless editing plus the
+> review/apply workflow work end-to-end. The real device drivers (OpenWrt SSH/UCI
+> and JetStream SSH/CLI) are **fully implemented** and exercised by the test suite
+> against the throwaway mock SSH containers in [`mocks/`](mocks/); switch to them
+> by setting `SDNMAN_USE_MOCK_DEVICES=0`.
 
 ## Architecture
 
@@ -73,6 +74,11 @@ staged as **pending changes** rather than pushed immediately. From
 Nothing is sent to a device until you apply. Each apply is recorded in the
 history (`/config/history`).
 
+> **Read-only mode (default on):** as a safety default the controller starts in
+> read-only mode, where applying to devices is blocked. An admin enables applying
+> by switching off the **Read-only mode** toggle in the top bar. Editing config and
+> reverting pending changes stay available either way.
+
 ## Backups
 
 From the UI (admin only): **Backup → Download / Import**.
@@ -128,6 +134,30 @@ Per-device host, port and username come from an optional `connection` block in
       port: 22
       username: root
 ```
+
+## Frontend (no build step)
+
+The UI is server-rendered, with **no Node/JavaScript build pipeline** — the browser
+loads exactly what is checked into the repo:
+
+- **Jinja2 templates** (`presentation/templates/`) render full HTML pages on the
+  server. `base.html` is the shared layout (top bar, left sidebar, content area);
+  each page does `{% extends "base.html" %}` and fills in the content block.
+- **HTMX** (`static/js/htmx.min.js`) adds the few dynamic bits without hand-written
+  JavaScript. You annotate an element with attributes like
+  `hx-get="/clients?..."` and `hx-target="#client-table"`: HTMX fetches that URL and
+  swaps the returned HTML into the target element. The matching route
+  (`clients_bp.py`) notices the `HX-Request` header and returns just the table
+  partial instead of the whole page. This powers the live client search and
+  pagination — the only HTMX on the site.
+- **`static/js/ui.js`** is a tiny hand-written script whose only job is to
+  collapse/expand the sidebar and remember that choice in `localStorage`.
+- **CSS** is one hand-written file, `static/css/app.css` (no Tailwind). Colours,
+  spacing, radius and fonts are declared once as **CSS variables** (custom
+  properties) in the `:root` block at the top — e.g. `--accent`, `--panel`,
+  `--radius-card` — and reused everywhere via `var(--accent)`. Change a value in
+  `:root` to restyle the whole app. The rest of the file is grouped into labelled
+  sections (e.g. `/* ---------- Tables ---------- */`).
 
 ## Roadmap
 

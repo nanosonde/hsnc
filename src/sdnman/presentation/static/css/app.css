@@ -1,3 +1,18 @@
+/*
+ * app.css — the entire stylesheet for sdn-manager.
+ *
+ * It is hand-written plain CSS with no Tailwind and no build step: the browser
+ * loads this one file exactly as checked in. Layout of the file:
+ *
+ *   1. @font-face  — the bundled Manrope web font (from static/fonts/).
+ *   2. :root       — "design tokens": every colour, font, radius and shadow is
+ *                    declared once here as a CSS variable (e.g. --accent) and
+ *                    reused via var(--accent). Change a value here to restyle the
+ *                    whole UI in one place.
+ *   3. Sections    — the remaining rules are grouped under banner comments such as
+ *                    "App shell", "Tables" and "Buttons"; search for a banner to
+ *                    find the styles for that part of the screen.
+ */
 @font-face {
   font-family: "Manrope";
   font-style: normal;

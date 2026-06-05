@@ -1,4 +1,8 @@
 <!DOCTYPE html>
+{# Shared page layout: top bar + left sidebar + content area. Every page does
+   `{% extends "base.html" %}` and fills the `content` block. htmx.min.js is loaded
+   here so any page can use hx-* attributes (see clients.html for the one example);
+   ui.js, loaded at the bottom, only handles collapsing the sidebar. #}
 <html lang="en">
 <head>
   <meta charset="utf-8" />
