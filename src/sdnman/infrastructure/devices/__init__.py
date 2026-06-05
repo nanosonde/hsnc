@@ -1,1 +1,1 @@
-"""Device adapters (mock + real-device stubs)."""
+"""Device adapters — the configuration plane (mock and real SSH implementations)."""

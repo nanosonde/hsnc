@@ -48,9 +48,9 @@ services:
     networks:
       - mocknet
 
-  # Optional: run sdn-manager against the mocks instead of the in-process mock
-  # adapter. The real SSH adapters are still stubs, so this is provided for when
-  # they are implemented. Enable with:  --profile controller
+  # Optional: run sdn-manager against the mocks (SDNMAN_USE_MOCK_DEVICES=0) so the
+  # real SSH adapters drive the simulators over the network instead of using the
+  # in-process mock adapter. Enable with:  --profile controller
   controller:
     profiles: ["controller"]
     build:

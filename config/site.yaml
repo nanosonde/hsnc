@@ -1,4 +1,4 @@
-# Site definition (single-site MVP).
+# Site definition (one site is supported today).
 id: default
 name: Default
 description: Primary site

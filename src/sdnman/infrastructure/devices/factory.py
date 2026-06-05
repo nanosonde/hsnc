@@ -1,9 +1,8 @@
 """Adapter factory selecting the right :class:`DeviceAdapter` per device.
 
-For the MVP every device is handled by the mock adapter. Switching the factory
-configuration to ``use_mock=False`` routes devices to the real (stubbed)
-OpenWrt/JetStream adapters by device kind, proving the seam without changing any
-inner-layer code.
+With ``use_mock=True`` every device is handled by the in-memory mock adapter.
+With ``use_mock=False`` devices are routed by kind to the real OpenWrt and
+JetStream SSH adapters, without any change to inner-layer code.
 """
 
 from __future__ import annotations

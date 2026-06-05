@@ -21,7 +21,7 @@ from .value_objects import DataVolume, IpAddress, MacAddress, Throughput
 
 @dataclass
 class Site:
-    """A logical grouping of devices and clients (single-site MVP)."""
+    """A logical grouping of devices and clients (one site is supported today)."""
 
     id: str
     name: str

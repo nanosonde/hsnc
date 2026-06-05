@@ -10,7 +10,7 @@ developed and tested against realistic SSH targets without physical hardware.
 | [`jetstream/`](./jetstream) | TP-Link JetStream switch | JetStream CLI over SSH | `2202` | `admin` / `admin` |
 
 Each is a **device simulator**, not part of the app. They emulate exactly the command
-surface emitted/consumed by the renderers and the (currently stubbed) adapters:
+surface emitted and consumed by the renderers and the SSH adapters:
 
 - `UciConfigRenderer` / `OpenWrtSshAdapter` ⟷ `mock-openwrt`
 - `JetStreamCliRenderer` / `JetStreamCliAdapter` ⟷ `mock-jetstream`

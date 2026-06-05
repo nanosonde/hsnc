@@ -3,7 +3,7 @@
 Accepts configuration silently and echoes the declarative device on re-read.
 Runtime/monitoring demo data lives in
 :class:`~sdnman.infrastructure.devices.monitoring.MockMonitoringProvider`.
-Used for the MVP and for tests/local development.
+Used for tests and for running the app locally without real hardware.
 """
 
 from __future__ import annotations
