@@ -221,4 +221,10 @@ loads exactly what is checked into the repo:
 
 ## License
 
-MIT — see [LICENSE](LICENSE).
+AGPL-3.0-or-later — see [LICENSE](LICENSE).
+
+This is free software: you may use, modify and redistribute it (including
+commercially) under the terms of the GNU Affero General Public License. Because of
+the AGPL's network-interaction clause (section 13), if you run a modified version
+as a network service you must offer its complete source code to the users of that
+service. It is provided **as is**, without any warranty.
