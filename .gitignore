@@ -23,7 +23,10 @@ coverage.xml
 # Runtime data (config + sqlite live under data/ at runtime)
 /data/*.db
 /data/*.db-*
+/data/*.sock
 /data/backups/
+/data/desired_config.json
+/data/current_config.json
 /data/applied_config.json
 /data/config-backups/
 
