@@ -6,6 +6,7 @@ from sdnman.domain.entities import Device, SwitchPort, Vlan
 from sdnman.domain.enums import ConnectionType, DeviceKind, DeviceStatus, PortMode
 from sdnman.domain.value_objects import IpAddress, MacAddress
 from sdnman.infrastructure.devices.jetstream_cli_adapter import JetStreamCliAdapter
+from sdnman.infrastructure.devices.monitoring import JetStreamSshMonitoringProvider
 from sdnman.infrastructure.devices.ssh_transport import (
     FakeSshRunner,
     SshConnectionResolver,
@@ -68,9 +69,16 @@ def _adapter(runner: FakeSshRunner) -> JetStreamCliAdapter:
     return JetStreamCliAdapter(resolver=resolver, runner_factory=lambda target: runner)
 
 
+def _monitor(runner: FakeSshRunner) -> JetStreamSshMonitoringProvider:
+    resolver = SshConnectionResolver(SshConnectionSettings())
+    return JetStreamSshMonitoringProvider(
+        resolver=resolver, runner_factory=lambda target: runner
+    )
+
+
 def test_fetch_status_parses_system_info() -> None:
     runner = FakeSshRunner({"show system-info": _SYSTEM_INFO})
-    device = _adapter(runner).fetch_status(_device())
+    device = _monitor(runner).fetch_status(_device())
 
     assert device.status is DeviceStatus.CONNECTED
     assert device.model == "TL-SG2210P"
@@ -96,7 +104,7 @@ def test_fetch_config_parses_vlans_and_ports() -> None:
 
 def test_fetch_clients_from_mac_table() -> None:
     runner = FakeSshRunner({"show mac address-table": _MAC_TABLE})
-    clients = _adapter(runner).fetch_clients(_device())
+    clients = _monitor(runner).fetch_clients(_device())
 
     assert [str(c.mac) for c in clients] == ["00:11:22:AA:BB:01", "00:11:22:AA:BB:03"]
     assert clients[0].connection is ConnectionType.WIRED

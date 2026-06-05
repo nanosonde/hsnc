@@ -17,7 +17,6 @@ dependencies = [
     "pydantic>=2.6",
     "Werkzeug>=3.0",
     "click>=8.1",
-    "APScheduler>=3.10",
     "gunicorn>=21.2",
 ]
 

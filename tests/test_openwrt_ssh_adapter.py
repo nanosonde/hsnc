@@ -7,6 +7,7 @@ import json
 from sdnman.domain.entities import Device
 from sdnman.domain.enums import ConnectionType, DeviceKind, DeviceStatus, PortMode
 from sdnman.domain.value_objects import IpAddress, MacAddress
+from sdnman.infrastructure.devices.monitoring import OpenWrtSshMonitoringProvider
 from sdnman.infrastructure.devices.openwrt_ssh_adapter import OpenWrtSshAdapter
 from sdnman.infrastructure.devices.ssh_transport import (
     FakeSshRunner,
@@ -70,6 +71,13 @@ def _adapter(runner: FakeSshRunner) -> OpenWrtSshAdapter:
     return OpenWrtSshAdapter(resolver=resolver, runner_factory=lambda target: runner)
 
 
+def _monitor(runner: FakeSshRunner) -> OpenWrtSshMonitoringProvider:
+    resolver = SshConnectionResolver(SshConnectionSettings())
+    return OpenWrtSshMonitoringProvider(
+        resolver=resolver, runner_factory=lambda target: runner
+    )
+
+
 def test_fetch_status_parses_board_and_uptime() -> None:
     runner = FakeSshRunner(
         {
@@ -77,7 +85,7 @@ def test_fetch_status_parses_board_and_uptime() -> None:
             "ubus call network.interface.lan status": _LAN_STATUS,
         }
     )
-    device = _adapter(runner).fetch_status(_device())
+    device = _monitor(runner).fetch_status(_device())
 
     assert device.status is DeviceStatus.CONNECTED
     assert device.firmware == "23.05.3"
@@ -109,7 +117,7 @@ def test_fetch_config_parses_vlans_ports_and_ssids() -> None:
 
 def test_fetch_clients_from_dhcp_leases() -> None:
     runner = FakeSshRunner({"ubus call dhcp ipv4leases": _LEASES})
-    clients = _adapter(runner).fetch_clients(_device())
+    clients = _monitor(runner).fetch_clients(_device())
 
     assert [str(c.mac) for c in clients] == ["1C:61:B4:00:11:22", "A4:83:E7:00:33:44"]
     assert clients[0].name == "desktop"

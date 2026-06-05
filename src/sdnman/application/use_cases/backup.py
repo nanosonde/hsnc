@@ -1,8 +1,9 @@
-"""Use cases: export and import a full backup (config + runtime history).
+"""Use cases: export and import a full backup (config + runtime + history).
 
 A backup is a single ZIP archive containing:
     config/<file>      -> raw YAML configuration files
     runtime.json       -> all runtime tables exported as JSON rows
+    history.jsonl      -> the apply/audit history (one JSON object per line)
     manifest.json      -> archive metadata (version, created_at)
 """
 
@@ -13,20 +14,27 @@ import json
 import zipfile
 from datetime import UTC, datetime
 
-from ...domain.interfaces import ConfigArchive, RuntimeStore
+from ...domain.interfaces import ApplyHistoryStore, ConfigArchive, RuntimeStore
 
 ARCHIVE_VERSION = 1
 _CONFIG_PREFIX = "config/"
 _RUNTIME_NAME = "runtime.json"
+_HISTORY_NAME = "history.jsonl"
 _MANIFEST_NAME = "manifest.json"
 
 
 class ExportBackup:
-    """Produce a ZIP archive (as bytes) of config and runtime history."""
+    """Produce a ZIP archive (as bytes) of config, runtime and history."""
 
-    def __init__(self, config: ConfigArchive, runtime: RuntimeStore) -> None:
+    def __init__(
+        self,
+        config: ConfigArchive,
+        runtime: RuntimeStore,
+        history: ApplyHistoryStore,
+    ) -> None:
         self._config = config
         self._runtime = runtime
+        self._history = history
 
     def execute(self) -> bytes:
         buffer = io.BytesIO()
@@ -42,16 +50,23 @@ class ExportBackup:
 
             runtime_rows = self._runtime.export_rows()
             archive.writestr(_RUNTIME_NAME, json.dumps(runtime_rows, indent=2, default=str))
+            archive.writestr(_HISTORY_NAME, self._history.export_text())
 
         return buffer.getvalue()
 
 
 class ImportBackup:
-    """Restore config and runtime history from a backup archive's bytes."""
+    """Restore config, runtime and history from a backup archive's bytes."""
 
-    def __init__(self, config: ConfigArchive, runtime: RuntimeStore) -> None:
+    def __init__(
+        self,
+        config: ConfigArchive,
+        runtime: RuntimeStore,
+        history: ApplyHistoryStore,
+    ) -> None:
         self._config = config
         self._runtime = runtime
+        self._history = history
 
     def execute(self, archive_bytes: bytes) -> None:
         buffer = io.BytesIO(archive_bytes)
@@ -75,3 +90,6 @@ class ImportBackup:
             if _RUNTIME_NAME in names:
                 runtime_rows = json.loads(archive.read(_RUNTIME_NAME))
                 self._runtime.import_rows(runtime_rows)
+
+            if _HISTORY_NAME in names:
+                self._history.import_text(archive.read(_HISTORY_NAME).decode("utf-8"))

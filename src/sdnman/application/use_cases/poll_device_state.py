@@ -3,7 +3,7 @@
 from __future__ import annotations
 
 from collections.abc import Callable
-from datetime import UTC, datetime
+from datetime import UTC, datetime, timedelta
 
 from ...domain.entities import AssociationFailure
 from ...domain.interfaces import RuntimeStore
@@ -23,14 +23,16 @@ class PollDeviceState:
         self,
         network: NetworkStateService,
         runtime: RuntimeStore,
+        retention_days: int = 30,
         clock: Clock = _utcnow,
     ) -> None:
         self._network = network
         self._runtime = runtime
+        self._retention_days = retention_days
         self._clock = clock
 
     def execute(self) -> int:
-        """Return the number of devices polled."""
+        """Record one runtime snapshot, prune old rows, return devices polled."""
 
         now = self._clock()
         devices = self._network.devices()
@@ -47,4 +49,8 @@ class PollDeviceState:
             AssociationFailure("WPA Authentication Timeout/Failure", 0),
         ]
         self._runtime.record_association_failures(failures, now)
+
+        # Bound time-series growth: drop rows older than the retention window.
+        if self._retention_days > 0:
+            self._runtime.prune(now - timedelta(days=self._retention_days))
         return len(devices)

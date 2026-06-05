@@ -1,40 +1,31 @@
 """TP-Link JetStream managed-switch adapter over SSH/CLI.
 
-Talks to JetStream switches using the same CLI surface the mock container
-emulates:
+Configuration plane only — runtime/monitoring data lives in
+:class:`~sdnman.infrastructure.devices.monitoring.JetStreamSshMonitoringProvider`
+(and will move to SNMPv3 once implemented). Talks to JetStream switches using the
+same CLI surface the mock container emulates:
 
-* :meth:`fetch_status`  — ``show system-info`` (model / firmware / mac / uptime)
 * :meth:`fetch_config`  — ``show running-config`` parsed into VLANs and ports
-* :meth:`fetch_clients` — ``show mac address-table``
 * :meth:`push_config`   — :class:`JetStreamCliRenderer` commands fed through one
   interactive shell session (config mode is stateful)
 
-Read commands run as a single ``exec`` (``ssh admin@host "show ..."``); the push
-uses one interactive shell because entering/exiting config contexts is stateful.
+The read runs as a single ``exec`` (``ssh admin@host "show ..."``); the push uses
+one interactive shell because entering/exiting config contexts is stateful.
 """
 
 from __future__ import annotations
 
-import re
 from dataclasses import replace
 
-from ...domain.entities import Client, Device, SwitchPort, Vlan
-from ...domain.enums import ConnectionType, DeviceKind, DeviceStatus, PortMode
+from ...domain.entities import Device, SwitchPort, Vlan
+from ...domain.enums import DeviceKind, PortMode
 from ...domain.interfaces import DeviceAdapter
-from ...domain.value_objects import MacAddress
 from .config_renderers import JetStreamCliRenderer
 from .ssh_transport import (
     RunnerFactory,
     SshCommandRunner,
     SshConnectionResolver,
     default_runner_factory,
-)
-
-_MAC_TABLE_RE = re.compile(
-    r"^([0-9A-Fa-f]{2}(?:[-:][0-9A-Fa-f]{2}){5})\s+(\d+)\s+(\S+)", re.MULTILINE
-)
-_UPTIME_RE = re.compile(
-    r"(?:(\d+)\s*days?)?\s*(\d{1,2}):(\d{2}):(\d{2})", re.IGNORECASE
 )
 
 
@@ -58,22 +49,6 @@ class JetStreamCliAdapter(DeviceAdapter):
         return self._runner_factory(self._resolver.resolve(device))
 
     # -- reads ---------------------------------------------------------------
-    def fetch_status(self, device: Device) -> Device:
-        runner = self._runner(device)
-        with runner:
-            raw = runner.run("show system-info")
-        info = self._parse_key_values(raw)
-        mac = info.get("MAC Address")
-        return replace(
-            device,
-            status=DeviceStatus.CONNECTED,
-            name=info.get("Device Name", device.name),
-            model=info.get("Device Model", device.model),
-            firmware=info.get("Software Version", device.firmware),
-            mac=MacAddress(mac) if mac else device.mac,
-            uptime_seconds=self._parse_uptime(info.get("Running Time", "")),
-        )
-
     def fetch_config(self, device: Device) -> Device:
         runner = self._runner(device)
         with runner:
@@ -86,25 +61,6 @@ class JetStreamCliAdapter(DeviceAdapter):
             ports=ports or device.ports,
         )
 
-    def fetch_clients(self, device: Device) -> list[Client]:
-        runner = self._runner(device)
-        with runner:
-            raw = runner.run("show mac address-table")
-        clients: list[Client] = []
-        for mac, _vlan, port in _MAC_TABLE_RE.findall(raw):
-            clients.append(
-                Client(
-                    id=f"{device.id}-{MacAddress(mac)}",
-                    name=str(MacAddress(mac)),
-                    mac=MacAddress(mac),
-                    connection=ConnectionType.WIRED,
-                    status=DeviceStatus.CONNECTED,
-                    ap_or_port=port,
-                    site_id=device.site_id,
-                )
-            )
-        return clients
-
     # -- writes --------------------------------------------------------------
     def push_config(self, device: Device) -> None:
         runner = self._runner(device)
@@ -112,28 +68,6 @@ class JetStreamCliAdapter(DeviceAdapter):
             runner.run_shell(self._renderer.render(device))
 
     # -- parsing helpers -----------------------------------------------------
-    @staticmethod
-    def _parse_key_values(raw: str) -> dict[str, str]:
-        info: dict[str, str] = {}
-        for line in raw.splitlines():
-            if " - " in line:
-                key, _, value = line.partition(" - ")
-                info[key.strip()] = value.strip()
-        return info
-
-    @staticmethod
-    def _parse_uptime(text: str) -> int:
-        match = _UPTIME_RE.search(text)
-        if not match:
-            return 0
-        days, hours, minutes, seconds = match.groups()
-        return (
-            int(days or 0) * 86400
-            + int(hours) * 3600
-            + int(minutes) * 60
-            + int(seconds)
-        )
-
     @classmethod
     def _parse_running_config(
         cls, raw: str

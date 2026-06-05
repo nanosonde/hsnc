@@ -1,0 +1,12 @@
+#!/command/with-contenv sh
+# Web service: server-rendered Flask app via gunicorn. Pure reader of runtime.db.
+# HOME points at the runtime user's home so gunicorn's control server can write
+# its state there instead of failing on the root-owned /root.
+export HOME=/home/appuser
+exec /command/s6-setuidgid appuser \
+  gunicorn \
+    --bind 0.0.0.0:8080 \
+    --workers 1 \
+    --threads 4 \
+    --timeout 60 \
+    sdnman.presentation.wsgi:app

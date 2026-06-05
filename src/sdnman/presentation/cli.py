@@ -1,13 +1,20 @@
-"""Command-line interface: run the dev server and manage backups."""
+"""Command-line interface: run the dev server, the poller and manage backups."""
 
 from __future__ import annotations
 
+import logging
+import signal
 import sys
+import time
 from pathlib import Path
 
 import click
 
+from ..infrastructure.container import Container
 from .app import create_app
+from .settings import settings_from_env
+
+_log = logging.getLogger("sdnman.poller")
 
 
 @click.group()
@@ -24,6 +31,56 @@ def serve(host: str, port: int, debug: bool) -> None:
 
     app = create_app()
     app.run(host=host, port=port, debug=debug)
+
+
+@main.command()
+def poll() -> None:
+    """Run a single device poll sweep and exit (one-shot)."""
+
+    logging.basicConfig(level=logging.INFO, format="%(asctime)s %(levelname)s %(message)s")
+    container = Container(settings_from_env())
+    try:
+        count = container.poll_device_state.execute()
+        _log.info("Polled %d devices", count)
+    finally:
+        container.close()
+
+
+@main.command("poll-daemon")
+def poll_daemon() -> None:
+    """Continuously poll devices on the configured interval (the poller process)."""
+
+    logging.basicConfig(level=logging.INFO, format="%(asctime)s %(levelname)s %(message)s")
+    settings = settings_from_env()
+    container = Container(settings)
+    interval = settings.poll_interval_seconds
+
+    stopping = False
+
+    def _stop(signum, _frame):  # type: ignore[no-untyped-def]
+        nonlocal stopping
+        stopping = True
+        _log.info("Received signal %s, shutting down poller", signum)
+
+    signal.signal(signal.SIGTERM, _stop)
+    signal.signal(signal.SIGINT, _stop)
+
+    _log.info("Poller started (interval=%ss, retention=%sd)", interval, settings.retention_days)
+    try:
+        while not stopping:
+            try:
+                count = container.poll_device_state.execute()
+                _log.info("Polled %d devices", count)
+            except Exception:  # noqa: BLE001 - never let one sweep kill the loop
+                _log.exception("Poll sweep failed")
+            # Sleep in short slices so signals are handled promptly.
+            slept = 0.0
+            while slept < interval and not stopping:
+                time.sleep(min(1.0, interval - slept))
+                slept += 1.0
+    finally:
+        container.close()
+        _log.info("Poller stopped")
 
 
 @main.group()

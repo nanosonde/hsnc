@@ -2,12 +2,13 @@
 
 Stores time-series runtime data: device status snapshots, client sessions and
 association-failure counts. A tiny ``schema_version`` table drives forward-only
-migrations applied automatically at startup.
+migrations applied automatically at startup. Apply/audit history lives elsewhere
+(:class:`JsonlApplyHistoryStore`), so this database has a single writer (the
+poller) and can be pruned on a retention window.
 """
 
 from __future__ import annotations
 
-import json
 import sqlite3
 import threading
 from collections.abc import Iterable
@@ -15,26 +16,22 @@ from datetime import datetime
 from pathlib import Path
 
 from ...domain.entities import (
-    ApplyEvent,
-    ApplyOutcome,
     AssociationFailure,
     Client,
     Device,
-    FieldChange,
 )
-from ...domain.interfaces import ApplyHistoryStore, RuntimeStore
+from ...domain.interfaces import RuntimeStore
 
-SCHEMA_VERSION = 2
+SCHEMA_VERSION = 1
 
 _RUNTIME_TABLES = (
     "device_status",
     "client_session",
     "association_failure",
-    "apply_event",
 )
 
 
-class SqliteRuntimeStore(RuntimeStore, ApplyHistoryStore):
+class SqliteRuntimeStore(RuntimeStore):
     """Thread-safe SQLite runtime store with automatic migrations."""
 
     def __init__(self, db_path: str | Path) -> None:
@@ -46,6 +43,7 @@ class SqliteRuntimeStore(RuntimeStore, ApplyHistoryStore):
         )
         self._conn.row_factory = sqlite3.Row
         self._conn.execute("PRAGMA journal_mode=WAL")
+        self._conn.execute("PRAGMA busy_timeout=5000")
         self._conn.execute("PRAGMA foreign_keys=ON")
         self._migrate()
 
@@ -63,8 +61,6 @@ class SqliteRuntimeStore(RuntimeStore, ApplyHistoryStore):
 
             if current < 1:
                 self._apply_v1(cur)
-            if current < 2:
-                self._apply_v2(cur)
 
             cur.execute("DELETE FROM schema_version")
             cur.execute("INSERT INTO schema_version (version) VALUES (?)", (SCHEMA_VERSION,))
@@ -112,22 +108,6 @@ class SqliteRuntimeStore(RuntimeStore, ApplyHistoryStore):
             );
             CREATE INDEX IF NOT EXISTS idx_assoc_failure_time
                 ON association_failure (recorded_at);
-            """
-        )
-
-    @staticmethod
-    def _apply_v2(cur: sqlite3.Cursor) -> None:
-        cur.executescript(
-            """
-            CREATE TABLE IF NOT EXISTS apply_event (
-                id            INTEGER PRIMARY KEY AUTOINCREMENT,
-                applied_at    TEXT NOT NULL,
-                username      TEXT NOT NULL DEFAULT '',
-                ok            INTEGER NOT NULL DEFAULT 0,
-                details_json  TEXT NOT NULL DEFAULT '[]'
-            );
-            CREATE INDEX IF NOT EXISTS idx_apply_event_time
-                ON apply_event (applied_at);
             """
         )
 
@@ -199,82 +179,22 @@ class SqliteRuntimeStore(RuntimeStore, ApplyHistoryStore):
             ).fetchall()
         return [AssociationFailure(r["category"], r["count"]) for r in rows]
 
-    # -- ApplyHistoryStore ------------------------------------------------
+    # -- retention --------------------------------------------------------
 
-    def record_apply_event(self, event: ApplyEvent) -> None:
-        details = json.dumps(
-            {
-                "action": event.action,
-                "outcomes": [
-                    {
-                        "device_id": o.device_id,
-                        "device_name": o.device_name,
-                        "ok": o.ok,
-                        "message": o.message,
-                        "changes": [
-                            {"field": c.field, "old": c.old, "new": c.new}
-                            for c in o.changes
-                        ],
-                    }
-                    for o in event.outcomes
-                ],
-            }
-        )
+    def prune(self, cutoff: datetime) -> int:
+        """Delete runtime rows recorded before ``cutoff``; return rows removed."""
+        iso = cutoff.isoformat()
+        removed = 0
         with self._lock:
-            self._conn.execute(
-                "INSERT INTO apply_event (applied_at, username, ok, details_json) "
-                "VALUES (?, ?, ?, ?)",
-                (
-                    event.applied_at.isoformat(),
-                    event.username,
-                    1 if event.ok else 0,
-                    details,
-                ),
-            )
+            for table in _RUNTIME_TABLES:
+                cur = self._conn.execute(
+                    f"DELETE FROM {table} WHERE recorded_at < ?", (iso,)
+                )
+                removed += cur.rowcount
             self._conn.commit()
+        return removed
 
-    def list_apply_events(self, limit: int = 50) -> list[ApplyEvent]:
-        with self._lock:
-            rows = self._conn.execute(
-                "SELECT id, applied_at, username, ok, details_json FROM apply_event "
-                "ORDER BY id DESC LIMIT ?",
-                (limit,),
-            ).fetchall()
-        events: list[ApplyEvent] = []
-        for row in rows:
-            details = json.loads(row["details_json"])
-            # Back-compat: legacy rows stored a bare list of outcomes; new rows
-            # wrap them in a dict alongside the action type.
-            if isinstance(details, dict):
-                action = details.get("action", "apply")
-                raw_outcomes = details.get("outcomes", [])
-            else:
-                action = "apply"
-                raw_outcomes = details
-            outcomes = [
-                ApplyOutcome(
-                    device_id=o["device_id"],
-                    device_name=o["device_name"],
-                    ok=bool(o["ok"]),
-                    message=o.get("message", ""),
-                    changes=[
-                        FieldChange(c["field"], c["old"], c["new"])
-                        for c in o.get("changes", [])
-                    ],
-                )
-                for o in raw_outcomes
-            ]
-            events.append(
-                ApplyEvent(
-                    id=row["id"],
-                    applied_at=datetime.fromisoformat(row["applied_at"]),
-                    username=row["username"],
-                    ok=bool(row["ok"]),
-                    action=action,
-                    outcomes=outcomes,
-                )
-            )
-        return events
+    # -- backup -----------------------------------------------------------
 
     def export_rows(self) -> dict[str, list[dict]]:
         with self._lock:

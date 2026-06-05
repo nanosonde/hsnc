@@ -23,6 +23,8 @@ from sdnman.domain.interfaces import (
     ConfigWriter,
     DeviceAdapter,
     DeviceAdapterFactory,
+    MonitoringProvider,
+    MonitoringProviderFactory,
     RuntimeStore,
     TopologyProvider,
 )
@@ -51,20 +53,11 @@ class FakeConfigRepository(ConfigRepository):
 
 
 class FakeDeviceAdapter(DeviceAdapter):
-    def __init__(self, clients_by_device: dict[str, list[Client]]) -> None:
-        self._clients = clients_by_device
-
     def supports(self, device: Device) -> bool:
         return True
 
-    def fetch_status(self, device: Device) -> Device:
-        return device
-
     def fetch_config(self, device: Device) -> Device:
         return device
-
-    def fetch_clients(self, device: Device) -> list[Client]:
-        return list(self._clients.get(device.id, []))
 
     def push_config(self, device: Device) -> None:
         return None
@@ -76,6 +69,25 @@ class FakeAdapterFactory(DeviceAdapterFactory):
 
     def for_device(self, device: Device) -> DeviceAdapter:
         return self._adapter
+
+
+class FakeMonitoringProvider(MonitoringProvider):
+    def __init__(self, clients_by_device: dict[str, list[Client]]) -> None:
+        self._clients = clients_by_device
+
+    def fetch_status(self, device: Device) -> Device:
+        return device
+
+    def fetch_clients(self, device: Device) -> list[Client]:
+        return list(self._clients.get(device.id, []))
+
+
+class FakeMonitoringFactory(MonitoringProviderFactory):
+    def __init__(self, provider: MonitoringProvider) -> None:
+        self._provider = provider
+
+    def for_device(self, device: Device) -> MonitoringProvider:
+        return self._provider
 
 
 class FakeRuntimeStore(RuntimeStore):
@@ -97,6 +109,9 @@ class FakeRuntimeStore(RuntimeStore):
 
     def latest_association_failures(self) -> list[AssociationFailure]:
         return list(self.failures)
+
+    def prune(self, cutoff: datetime) -> int:
+        return 0
 
     def export_rows(self) -> dict[str, list[dict]]:
         return {}
@@ -152,3 +167,9 @@ class FakeApplyHistoryStore(ApplyHistoryStore):
 
     def list_apply_events(self, limit: int = 50) -> list[ApplyEvent]:
         return list(reversed(self.events))[:limit]
+
+    def export_text(self) -> str:
+        return ""
+
+    def import_text(self, text: str) -> None:
+        return None

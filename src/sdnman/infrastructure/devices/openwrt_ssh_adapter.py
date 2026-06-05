@@ -1,11 +1,11 @@
 """OpenWrt device adapter (gateway / access point) over SSH + UCI.
 
-Talks to OpenWrt-based devices using the same ``uci`` / ``ubus`` surface the mock
-container emulates:
+Configuration plane only — runtime/monitoring data lives in
+:class:`~sdnman.infrastructure.devices.monitoring.OpenWrtSshMonitoringProvider`.
+Talks to OpenWrt-based devices using the same ``uci`` surface the mock container
+emulates:
 
-* :meth:`fetch_status`  — ``ubus call system board`` + ``network.interface.lan status``
 * :meth:`fetch_config`  — ``uci show network|wireless|system`` parsed into a Device
-* :meth:`fetch_clients` — ``ubus call dhcp ipv4leases``
 * :meth:`push_config`   — :class:`UciConfigRenderer` commands replayed over SSH
 
 Each command is stateless, so it runs as an individual ``exec`` over SSH.
@@ -13,14 +13,13 @@ Each command is stateless, so it runs as an individual ``exec`` over SSH.
 
 from __future__ import annotations
 
-import json
 import re
 from dataclasses import replace
 
-from ...domain.entities import Client, Device, SwitchPort, Vlan
-from ...domain.enums import ConnectionType, DeviceKind, DeviceStatus, PortMode
+from ...domain.entities import Device, SwitchPort, Vlan
+from ...domain.enums import DeviceKind, PortMode
 from ...domain.interfaces import DeviceAdapter
-from ...domain.value_objects import IpAddress, MacAddress
+from ...domain.value_objects import IpAddress
 from .config_renderers import UciConfigRenderer
 from .ssh_transport import (
     RunnerFactory,
@@ -54,24 +53,6 @@ class OpenWrtSshAdapter(DeviceAdapter):
         return self._runner_factory(self._resolver.resolve(device))
 
     # -- reads ---------------------------------------------------------------
-    def fetch_status(self, device: Device) -> Device:
-        runner = self._runner(device)
-        with runner:
-            board = json.loads(runner.run("ubus call system board"))
-            try:
-                lan = json.loads(runner.run("ubus call network.interface.lan status"))
-            except Exception:  # noqa: BLE001 - lan iface may be absent
-                lan = {}
-        release = board.get("release", {}) or {}
-        firmware = release.get("version") or device.firmware
-        return replace(
-            device,
-            status=DeviceStatus.CONNECTED,
-            model=board.get("model") or device.model,
-            firmware=firmware,
-            uptime_seconds=int(lan.get("uptime", device.uptime_seconds) or 0),
-        )
-
     def fetch_config(self, device: Device) -> Device:
         runner = self._runner(device)
         with runner:
@@ -93,33 +74,6 @@ class OpenWrtSshAdapter(DeviceAdapter):
             ports=ports or device.ports,
             ssids=ssids if ssids else device.ssids,
         )
-
-    def fetch_clients(self, device: Device) -> list[Client]:
-        runner = self._runner(device)
-        with runner:
-            raw = runner.run("ubus call dhcp ipv4leases")
-        data = json.loads(raw) if raw.strip() else {}
-        clients: list[Client] = []
-        for bridge in (data.get("device") or {}).values():
-            for lease in bridge.get("ipv4-leases", []) or []:
-                mac = lease.get("mac")
-                address = lease.get("address")
-                if not mac:
-                    continue
-                hostname = lease.get("hostname") or mac
-                clients.append(
-                    Client(
-                        id=f"{device.id}-{MacAddress(mac)}",
-                        name=hostname,
-                        mac=MacAddress(mac),
-                        connection=ConnectionType.WIRED,
-                        status=DeviceStatus.CONNECTED,
-                        ip=IpAddress(address) if address else None,
-                        ap_or_port=device.name,
-                        site_id=device.site_id,
-                    )
-                )
-        return clients
 
     # -- writes --------------------------------------------------------------
     def push_config(self, device: Device) -> None:

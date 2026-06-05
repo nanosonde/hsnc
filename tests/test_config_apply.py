@@ -146,7 +146,7 @@ def test_apply_partial_success_records_only_ok_devices(devices):
         def for_device(self, device: Device) -> DeviceAdapter:
             if device.id == "bad-1":
                 return _RaisingAdapter()
-            return FakeDeviceAdapter({})
+            return FakeDeviceAdapter()
 
     applied = FakeAppliedConfigStore()
     result = ApplyConfig(config, _MixedFactory(), applied, FakeApplyHistoryStore()).execute()

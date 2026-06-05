@@ -34,8 +34,10 @@ from .config.applied_config_store import FileAppliedConfigStore
 from .config.yaml_config_repository import YamlConfigRepository
 from .devices.config_renderers import DefaultConfigRendererFactory
 from .devices.factory import DefaultDeviceAdapterFactory
+from .devices.monitoring import DefaultMonitoringProviderFactory
 from .devices.ssh_transport import SshConnectionResolver, SshConnectionSettings
 from .devices.topology_provider import SimpleTopologyProvider
+from .persistence.jsonl_apply_history_store import JsonlApplyHistoryStore
 from .persistence.sqlite_runtime_store import SqliteRuntimeStore
 from .security import verify_password
 
@@ -48,11 +50,16 @@ class Settings:
     data_dir: Path
     use_mock_devices: bool = True
     poll_interval_seconds: int = 30
+    retention_days: int = 30
     ssh: SshConnectionSettings = field(default_factory=SshConnectionSettings)
 
     @property
-    def db_path(self) -> Path:
+    def runtime_db_path(self) -> Path:
         return self.data_dir / "runtime.db"
+
+    @property
+    def history_path(self) -> Path:
+        return self.data_dir / "history.jsonl"
 
     @property
     def config_backup_dir(self) -> Path:
@@ -69,8 +76,13 @@ class Container:
         self.config = YamlConfigRepository(
             settings.config_dir, backup_dir=settings.config_backup_dir
         )
-        self.runtime = SqliteRuntimeStore(settings.db_path)
+        self.runtime = SqliteRuntimeStore(settings.runtime_db_path)
+        self.history = JsonlApplyHistoryStore(settings.history_path)
         self.adapters = DefaultDeviceAdapterFactory(
+            use_mock=settings.use_mock_devices,
+            resolver=SshConnectionResolver(settings.ssh),
+        )
+        self.monitoring = DefaultMonitoringProviderFactory(
             use_mock=settings.use_mock_devices,
             resolver=SshConnectionResolver(settings.ssh),
         )
@@ -79,7 +91,7 @@ class Container:
         self.applied_config = FileAppliedConfigStore(settings.data_dir)
 
         # application services
-        self.network = NetworkStateService(self.config, self.adapters)
+        self.network = NetworkStateService(self.config, self.monitoring)
 
         # use cases
         self.authenticate_user = AuthenticateUser(self.config, verify_password)
@@ -90,9 +102,11 @@ class Container:
         self.get_device_detail = GetDeviceDetail(self.network)
         self.list_clients = ListClients(self.network)
         self.get_topology = GetTopology(self.network, self.topology_provider)
-        self.poll_device_state = PollDeviceState(self.network, self.runtime)
-        self.export_backup = ExportBackup(self.config, self.runtime)
-        self.import_backup = ImportBackup(self.config, self.runtime)
+        self.poll_device_state = PollDeviceState(
+            self.network, self.runtime, retention_days=settings.retention_days
+        )
+        self.export_backup = ExportBackup(self.config, self.runtime, self.history)
+        self.import_backup = ImportBackup(self.config, self.runtime, self.history)
 
         # configuration management use cases
         self.save_vlan = SaveVlan(self.config, self.config)
@@ -104,9 +118,9 @@ class Container:
         )
         self.plan_apply = PlanApply(self.config, self.applied_config, self.adapters)
         self.apply_config = ApplyConfig(
-            self.config, self.adapters, self.applied_config, self.runtime
+            self.config, self.adapters, self.applied_config, self.history
         )
-        self.list_apply_history = ListApplyHistory(self.runtime)
+        self.list_apply_history = ListApplyHistory(self.history)
         self.revert_changes = RevertPendingChanges(
             self.config, self.applied_config, self.config
         )
@@ -115,9 +129,10 @@ class Container:
             self.adapters,
             self.config,
             self.applied_config,
-            self.runtime,
+            self.history,
         )
         self.delete_device = DeleteDevice(self.config, self.applied_config)
 
     def close(self) -> None:
         self.runtime.close()
+        self.history.close()

@@ -115,42 +115,26 @@ def test_sqlite_import_rows_replaces(tmp_path):
     store.close()
 
 
-def test_sqlite_apply_event_persists_and_roundtrips(tmp_path):
+def test_jsonl_apply_history_store_roundtrips(tmp_path):
     from datetime import datetime
 
     from sdnman.domain.entities import ApplyEvent, ApplyOutcome
-
-    store = SqliteRuntimeStore(tmp_path / "rt.db")
-    event = ApplyEvent(
-        applied_at=datetime(2026, 6, 1, 12, 0, tzinfo=UTC),
-        username="admin",
-        ok=False,
-        outcomes=[
-            ApplyOutcome("d1", "Switch", ok=True),
-            ApplyOutcome("d2", "Gateway", ok=False, message="not implemented"),
-        ],
+    from sdnman.infrastructure.persistence.jsonl_apply_history_store import (
+        JsonlApplyHistoryStore,
     )
-    store.record_apply_event(event)
 
-    listed = store.list_apply_events()
-    assert len(listed) == 1
-    assert listed[0].username == "admin"
-    assert listed[0].ok is False
-    assert listed[0].action == "apply"
-    assert len(listed[0].outcomes) == 2
-    assert listed[0].outcomes[1].message == "not implemented"
-
-    # apply_event is included in backups (export/import roundtrip)
-    exported = store.export_rows()
-    assert len(exported["apply_event"]) == 1
-    store.import_rows({})
-    assert store.list_apply_events() == []
-    store.import_rows(exported)
-    restored = store.list_apply_events()
-    assert len(restored) == 1
-    assert restored[0].outcomes[1].message == "not implemented"
-
-    # a re-read event roundtrips its action type
+    store = JsonlApplyHistoryStore(tmp_path / "history.jsonl")
+    store.record_apply_event(
+        ApplyEvent(
+            applied_at=datetime(2026, 6, 1, 12, 0, tzinfo=UTC),
+            username="admin",
+            ok=False,
+            outcomes=[
+                ApplyOutcome("d1", "Switch", ok=True),
+                ApplyOutcome("d2", "Gateway", ok=False, message="not implemented"),
+            ],
+        )
+    )
     store.record_apply_event(
         ApplyEvent(
             applied_at=datetime(2026, 6, 2, 9, 0, tzinfo=UTC),
@@ -160,27 +144,82 @@ def test_sqlite_apply_event_persists_and_roundtrips(tmp_path):
             outcomes=[ApplyOutcome("d1", "Switch", ok=True)],
         )
     )
-    assert store.list_apply_events()[0].action == "reread"
+
+    listed = store.list_apply_events()
+    assert len(listed) == 2
+    # newest first
+    assert listed[0].action == "reread"
+    assert listed[1].username == "admin"
+    assert listed[1].ok is False
+    assert listed[1].outcomes[1].message == "not implemented"
+
+    # export/import round-trips the raw file contents
+    exported = store.export_text()
+    store.import_text("")
+    assert store.list_apply_events() == []
+    store.import_text(exported)
+    restored = store.list_apply_events()
+    assert len(restored) == 2
+    assert restored[0].action == "reread"
+    store.close()
+
+
+def test_sqlite_prune_removes_old_rows(tmp_path):
+    from datetime import datetime
+
+    store = SqliteRuntimeStore(tmp_path / "rt.db")
+    old = datetime(2026, 1, 1, tzinfo=UTC)
+    new = datetime(2026, 6, 1, tzinfo=UTC)
+    device = Device(
+        id="d1", name="D1", kind=DeviceKind.SWITCH,
+        mac=MacAddress("B0:4E:26:00:00:10"), status=DeviceStatus.CONNECTED,
+    )
+    store.record_device_status(device, old)
+    store.record_device_status(device, new)
+    store.record_association_failures([AssociationFailure("A", 1)], old)
+
+    removed = store.prune(datetime(2026, 3, 1, tzinfo=UTC))
+    assert removed == 2  # old device_status + old association_failure
+    rows = store.export_rows()
+    assert len(rows["device_status"]) == 1
     store.close()
 
 
 def test_backup_roundtrip(config_dir, tmp_path):
+    from datetime import datetime
+
+    from sdnman.domain.entities import ApplyEvent, ApplyOutcome
+    from sdnman.infrastructure.persistence.jsonl_apply_history_store import (
+        JsonlApplyHistoryStore,
+    )
+
     repo = YamlConfigRepository(config_dir)
     store = SqliteRuntimeStore(tmp_path / "rt.db")
-    from datetime import datetime
+    history = JsonlApplyHistoryStore(tmp_path / "history.jsonl")
     now = datetime(2026, 1, 1, tzinfo=UTC)
     store.record_association_failures([AssociationFailure("A", 2)], now)
+    history.record_apply_event(
+        ApplyEvent(
+            applied_at=now,
+            username="admin",
+            ok=True,
+            outcomes=[ApplyOutcome("d1", "Switch", ok=True)],
+        )
+    )
 
-    archive = ExportBackup(repo, store).execute()
+    archive = ExportBackup(repo, store, history).execute()
 
-    # wipe runtime + config
+    # wipe runtime + history + config
     store.import_rows({})
+    history.import_text("")
     (config_dir / "site.yaml").write_text("id: default\nname: WIPED\n")
 
-    ImportBackup(repo, store).execute(archive)
+    ImportBackup(repo, store, history).execute(archive)
     assert repo.get_site().name == "My Site"
     assert store.latest_association_failures() == [AssociationFailure("A", 2)]
+    assert len(history.list_apply_events()) == 1
     store.close()
+    history.close()
 
 
 def test_real_adapter_factory_routes_by_kind():
@@ -197,11 +236,15 @@ def test_real_adapter_factory_routes_by_kind():
     assert isinstance(factory.for_device(gateway), OpenWrtSshAdapter)
 
 
-def test_mock_adapter_factory_returns_data():
-    factory = DefaultDeviceAdapterFactory(use_mock=True)
+def test_mock_monitoring_factory_returns_data():
+    from sdnman.infrastructure.devices.monitoring import (
+        DefaultMonitoringProviderFactory,
+    )
+
+    factory = DefaultMonitoringProviderFactory(use_mock=True)
     device = Device(
         id="switch-1", name="SW", kind=DeviceKind.SWITCH,
         mac=MacAddress("B0:4E:26:00:00:10"),
     )
-    adapter = factory.for_device(device)
-    assert len(adapter.fetch_clients(device)) == 6
+    provider = factory.for_device(device)
+    assert len(provider.fetch_clients(device)) == 6

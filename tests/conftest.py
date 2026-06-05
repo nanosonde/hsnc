@@ -22,6 +22,8 @@ from .fakes import (
     FakeAdapterFactory,
     FakeConfigRepository,
     FakeDeviceAdapter,
+    FakeMonitoringFactory,
+    FakeMonitoringProvider,
 )
 
 
@@ -85,7 +87,12 @@ def config(site, users, devices) -> FakeConfigRepository:
 
 
 @pytest.fixture
-def adapters(clients) -> FakeAdapterFactory:
+def monitoring(clients) -> FakeMonitoringFactory:
     # all clients attached to switch-1
-    adapter = FakeDeviceAdapter({"switch-1": clients})
-    return FakeAdapterFactory(adapter)
+    provider = FakeMonitoringProvider({"switch-1": clients})
+    return FakeMonitoringFactory(provider)
+
+
+@pytest.fixture
+def adapters() -> FakeAdapterFactory:
+    return FakeAdapterFactory(FakeDeviceAdapter())

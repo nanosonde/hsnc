@@ -10,6 +10,7 @@ services:
       SDNMAN_SECRET_KEY: "change-me-in-production"
       SDNMAN_USE_MOCK_DEVICES: "1"
       SDNMAN_POLL_INTERVAL: "30"
+      SDNMAN_RETENTION_DAYS: "30"
     volumes:
       - controller-data:/data
     restart: unless-stopped

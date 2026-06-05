@@ -18,8 +18,8 @@ from sdnman.application.use_cases.poll_device_state import PollDeviceState
 from .fakes import FakeRuntimeStore, FakeTopologyProvider
 
 
-def _network(config, adapters) -> NetworkStateService:
-    return NetworkStateService(config, adapters)
+def _network(config, monitoring) -> NetworkStateService:
+    return NetworkStateService(config, monitoring)
 
 
 def test_authenticate_success(config):
@@ -42,8 +42,8 @@ def test_authenticate_unknown_user(config):
     assert use_case.execute("ghost", "x") is None
 
 
-def test_dashboard_summary(config, adapters):
-    network = _network(config, adapters)
+def test_dashboard_summary(config, monitoring):
+    network = _network(config, monitoring)
     runtime = FakeRuntimeStore()
     summary = GetDashboardSummary(config, network, runtime).execute()
 
@@ -54,51 +54,51 @@ def test_dashboard_summary(config, adapters):
     assert summary.device_count == 2
 
 
-def test_list_devices_includes_client_count(config, adapters):
-    network = _network(config, adapters)
+def test_list_devices_includes_client_count(config, monitoring):
+    network = _network(config, monitoring)
     rows = ListDevices(network).execute()
     by_id = {r.id: r for r in rows}
     assert by_id["switch-1"].client_count == 6
     assert by_id["gateway-1"].client_count == 0
 
 
-def test_get_device_detail(config, adapters):
-    network = _network(config, adapters)
+def test_get_device_detail(config, monitoring):
+    network = _network(config, monitoring)
     detail = GetDeviceDetail(network).execute("switch-1")
     assert detail is not None
     assert detail.row.name == "TL-SG2210P"
 
 
-def test_get_device_detail_missing(config, adapters):
-    network = _network(config, adapters)
+def test_get_device_detail_missing(config, monitoring):
+    network = _network(config, monitoring)
     assert GetDeviceDetail(network).execute("nope") is None
 
 
-def test_list_clients_pagination(config, adapters):
-    network = _network(config, adapters)
+def test_list_clients_pagination(config, monitoring):
+    network = _network(config, monitoring)
     paged = ListClients(network).execute(page=1, page_size=4)
     assert paged.total == 6
     assert len(paged.rows) == 4
     assert paged.total_pages == 2
 
 
-def test_list_clients_search(config, adapters):
-    network = _network(config, adapters)
+def test_list_clients_search(config, monitoring):
+    network = _network(config, monitoring)
     paged = ListClients(network).execute(search="client-3")
     assert paged.total == 1
     assert paged.rows[0].name == "client-3"
 
 
-def test_topology(config, adapters):
-    network = _network(config, adapters)
+def test_topology(config, monitoring):
+    network = _network(config, monitoring)
     view = GetTopology(network, FakeTopologyProvider()).execute()
     node_ids = {n.id for n in view.nodes}
     assert "internet" in node_ids
     assert "switch-1" in node_ids
 
 
-def test_poll_device_state(config, adapters):
-    network = _network(config, adapters)
+def test_poll_device_state(config, monitoring):
+    network = _network(config, monitoring)
     runtime = FakeRuntimeStore()
     count = PollDeviceState(
         network, runtime, clock=lambda: datetime(2026, 1, 1, tzinfo=UTC)

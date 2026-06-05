@@ -5,7 +5,7 @@ from __future__ import annotations
 from sdnman.application.use_cases.delete_device import DeleteDevice
 from sdnman.application.use_cases.sync_device_config import SyncDeviceConfig
 from sdnman.domain.entities import Device
-from sdnman.domain.enums import DeviceKind, DeviceStatus
+from sdnman.domain.enums import DeviceKind
 from sdnman.domain.interfaces import DeviceAdapter, DeviceAdapterFactory
 from sdnman.domain.value_objects import MacAddress
 
@@ -22,7 +22,7 @@ def test_sync_writes_config_updates_snapshot_and_records_reread(config):
     writer = FakeConfigWriter(config)
     applied = FakeAppliedConfigStore()
     history = FakeApplyHistoryStore()
-    adapters = FakeAdapterFactory(FakeDeviceAdapter({}))
+    adapters = FakeAdapterFactory(FakeDeviceAdapter())
 
     result = SyncDeviceConfig(config, adapters, writer, applied, history).execute(
         username="admin"
@@ -44,7 +44,7 @@ def test_sync_single_device_only_touches_that_device(config):
     writer = FakeConfigWriter(config)
     applied = FakeAppliedConfigStore()
     history = FakeApplyHistoryStore()
-    adapters = FakeAdapterFactory(FakeDeviceAdapter({}))
+    adapters = FakeAdapterFactory(FakeDeviceAdapter())
 
     result = SyncDeviceConfig(config, adapters, writer, applied, history).execute(
         device_ids=["switch-1"]
@@ -116,4 +116,4 @@ def test_mock_adapter_fetch_config_returns_device():
     )
     fresh = MockDeviceAdapter().fetch_config(device)
     assert fresh.id == "switch-1"
-    assert fresh.status is DeviceStatus.CONNECTED
+    assert fresh is device

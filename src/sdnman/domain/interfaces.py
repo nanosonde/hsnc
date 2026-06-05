@@ -41,7 +41,12 @@ class ConfigRepository(ABC):
 
 
 class DeviceAdapter(ABC):
-    """Talks to a real (or simulated) device to read state / push config.
+    """Talks to a real (or simulated) device to read and push *configuration*.
+
+    This is the **configuration plane** and is SSH-only for real devices.
+    Runtime/monitoring data lives behind :class:`MonitoringProvider` instead, so
+    the two concerns can evolve independently (e.g. monitoring via a Prometheus
+    exporter or SNMPv3 while configuration stays on SSH).
 
     Concrete adapters: MockDeviceAdapter, OpenWrtSshAdapter, JetStreamCliAdapter.
     """
@@ -49,10 +54,6 @@ class DeviceAdapter(ABC):
     @abstractmethod
     def supports(self, device: Device) -> bool:
         """Return True if this adapter can manage the given device."""
-
-    @abstractmethod
-    def fetch_status(self, device: Device) -> Device:
-        """Return the device enriched with live runtime status."""
 
     @abstractmethod
     def fetch_config(self, device: Device) -> Device:
@@ -64,10 +65,6 @@ class DeviceAdapter(ABC):
         """
 
     @abstractmethod
-    def fetch_clients(self, device: Device) -> list[Client]:
-        """Return clients currently associated with the device."""
-
-    @abstractmethod
     def push_config(self, device: Device) -> None:
         """Apply declarative configuration to the device (may be unimplemented)."""
 
@@ -77,6 +74,36 @@ class DeviceAdapterFactory(ABC):
 
     @abstractmethod
     def for_device(self, device: Device) -> DeviceAdapter: ...
+
+
+class MonitoringProvider(ABC):
+    """Reads live runtime state (the **monitoring plane**) for a device.
+
+    Decoupled from :class:`DeviceAdapter` (configuration) so monitoring can use a
+    different transport than SSH. Implementations may scrape SSH (the fallback),
+    an OpenWrt Prometheus exporter, SNMPv3 for switches, etc. When no monitoring
+    source is available, :class:`NullMonitoringProvider` reports the device as
+    ``DeviceStatus.UNKNOWN`` with no clients rather than inventing data.
+    """
+
+    @abstractmethod
+    def fetch_status(self, device: Device) -> Device:
+        """Return the device enriched with live runtime status.
+
+        On an unreachable monitoring source, implementations should mark the
+        device ``DeviceStatus.UNKNOWN`` (reachability unknown) rather than raise.
+        """
+
+    @abstractmethod
+    def fetch_clients(self, device: Device) -> list[Client]:
+        """Return clients currently observed on the device (may be empty)."""
+
+
+class MonitoringProviderFactory(ABC):
+    """Selects the appropriate :class:`MonitoringProvider` for a device."""
+
+    @abstractmethod
+    def for_device(self, device: Device) -> MonitoringProvider: ...
 
 
 class DeviceConfigRenderer(ABC):
@@ -129,6 +156,10 @@ class RuntimeStore(ABC):
 
     @abstractmethod
     def latest_association_failures(self) -> list[AssociationFailure]: ...
+
+    @abstractmethod
+    def prune(self, cutoff: datetime) -> int:
+        """Delete runtime rows recorded before ``cutoff``; return rows removed."""
 
     @abstractmethod
     def export_rows(self) -> dict[str, list[dict]]:
@@ -200,3 +231,11 @@ class ApplyHistoryStore(ABC):
     @abstractmethod
     def list_apply_events(self, limit: int = 50) -> list[ApplyEvent]:
         """Return the most recent apply runs, newest first."""
+
+    @abstractmethod
+    def export_text(self) -> str:
+        """Return the raw history (JSONL) for backups (empty if none)."""
+
+    @abstractmethod
+    def import_text(self, text: str) -> None:
+        """Replace the history with the provided raw (JSONL) contents."""
