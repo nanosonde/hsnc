@@ -18,9 +18,15 @@ services:
       # history baseline. Set to "0" if the controller is the sole source of
       # truth and devices are never changed out-of-band.
       SDNMAN_BASELINE_ON_START: "1"
-      # SSH passwords are read from the environment, never from devices.yaml.
-      # SDNMAN_OPENWRT_SSH_PASSWORD: "..."
-      # SDNMAN_JETSTREAM_SSH_PASSWORD: "..."
+    # SSH passwords are read from the environment, never from devices.yaml.
+    # Put them in a git-ignored .env file next to this compose file, e.g.:
+    #   SDNMAN_OPENWRT_SSH_PASSWORD=...
+    #   SDNMAN_JETSTREAM_SSH_PASSWORD=...
+    # Compose loads .env for ${VAR} interpolation, but only env_file injects the
+    # values into the container's environment where the app actually reads them.
+    env_file:
+      - path: .env
+        required: false
     volumes:
       - controller-data:/data
       # Your device inventory (connection profiles only). Create it first:

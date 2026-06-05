@@ -9,8 +9,10 @@ same CLI surface the mock container emulates:
 * :meth:`push_config`   — :class:`JetStreamCliRenderer` commands fed through one
   interactive shell session (config mode is stateful)
 
-The read runs as a single ``exec`` (``ssh admin@host "show ..."``); the push uses
-one interactive shell because entering/exiting config contexts is stateful.
+Both reads and writes run through a single interactive shell. These switches
+reject one-shot ``exec`` channels (``exec request failed on channel 0``), and
+``show running-config`` is only available after ``enable`` raises the session to
+privileged EXEC mode, so the read sends ``enable`` then ``show running-config``.
 """
 
 from __future__ import annotations
@@ -51,8 +53,10 @@ class JetStreamCliAdapter(DeviceAdapter):
     # -- reads ---------------------------------------------------------------
     def fetch_config(self, device: Device) -> Device:
         runner = self._runner(device)
+        # The switch rejects exec channels and gates `show running-config` behind
+        # privileged mode, so raise privilege then read inside one shell session.
         with runner:
-            raw = runner.run("show running-config")
+            raw = runner.run_shell(["enable", "show running-config"])
         hostname, vlans, ports = self._parse_running_config(raw)
         return replace(
             device,
@@ -88,7 +92,7 @@ class JetStreamCliAdapter(DeviceAdapter):
             head = words[0].lower()
 
             if head == "hostname" and len(words) >= 2:
-                hostname = words[1]
+                hostname = cls._unquote(" ".join(words[1:]))
                 current_vlan = current_port = None
             elif head == "vlan" and len(words) >= 2 and words[1].isdigit():
                 current_vlan = int(words[1])
@@ -97,8 +101,14 @@ class JetStreamCliAdapter(DeviceAdapter):
                     current_vlan, Vlan(vlan_id=current_vlan, name=f"VLAN{current_vlan}")
                 )
             elif head == "name" and current_vlan is not None and len(words) >= 2:
-                vlans[current_vlan] = Vlan(vlan_id=current_vlan, name=" ".join(words[1:]))
+                vlans[current_vlan] = Vlan(
+                    vlan_id=current_vlan, name=cls._unquote(" ".join(words[1:]))
+                )
             elif head == "interface" and len(words) >= 2:
+                # `interface vlan N` is the management SVI, not a physical port.
+                if words[1].lower() == "vlan":
+                    current_vlan = current_port = None
+                    continue
                 num = words[-1].split("/")[-1]
                 if num.isdigit():
                     current_port = int(num)
@@ -118,6 +128,14 @@ class JetStreamCliAdapter(DeviceAdapter):
         )
 
     @staticmethod
+    def _unquote(value: str) -> str:
+        """Strip a single pair of surrounding single/double quotes, if present."""
+        value = value.strip()
+        if len(value) >= 2 and value[0] == value[-1] and value[0] in "\"'":
+            return value[1:-1]
+        return value
+
+    @staticmethod
     def _apply_switchport(port: SwitchPort, rest: list[str]) -> None:
         if not rest:
             return
@@ -128,8 +146,20 @@ class JetStreamCliAdapter(DeviceAdapter):
             except ValueError:
                 port.mode = PortMode.TRUNK
         elif sub == "access" and len(rest) >= 3 and rest[1].lower() == "vlan":
+            port.mode = PortMode.ACCESS
             port.pvid = int(rest[2])
         elif sub == "general" and len(rest) >= 4 and rest[1].lower() == "allowed":
-            port.tagged_vlans = [int(v) for v in rest[3].split(",") if v.isdigit()]
+            vlan_ids = [int(v) for v in rest[3].split(",") if v.isdigit()]
+            membership = rest[4].lower() if len(rest) >= 5 else ""
+            if membership == "untagged":
+                # An untagged member is an access assignment; the PVID is set by
+                # the companion `switchport pvid` line.
+                port.mode = PortMode.ACCESS
+                if vlan_ids:
+                    port.pvid = vlan_ids[0]
+            else:
+                # `... tagged` (or no keyword, as the mock emits) means trunk.
+                port.mode = PortMode.TRUNK
+                port.tagged_vlans = vlan_ids
         elif sub == "pvid" and len(rest) >= 2 and rest[1].isdigit():
             port.pvid = int(rest[1])

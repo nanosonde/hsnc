@@ -52,6 +52,43 @@ _MAC_TABLE = (
     "00-11-22-aa-bb-03  20     Gi1/0/3   dynamic\n"
 )
 
+# Real capture from a TP-Link SG2005P-PD: quoted names, an `interface vlan` SVI,
+# `switchport general allowed vlan ... untagged|tagged`, and the shell echoes /
+# privileged prompt that surround the config in an interactive session.
+_REAL_RUNNING_CONFIG = (
+    "enable\n"
+    "SG2005P-PD-1#show running-config\n"
+    "!SG2005P-PD\n"
+    "#\n"
+    "vlan 1\n"
+    ' name "System-VLAN"\n'
+    "#\n"
+    "vlan 20\n"
+    ' name "FB_LAN_Guest"\n'
+    "#\n"
+    "vlan 40\n"
+    ' name "FREIFUNK_CLIENT"\n'
+    "#\n"
+    'hostname "SG2005P-PD-1"\n'
+    'location "Hauptverteilung"\n'
+    "#\n"
+    "interface vlan 1\n"
+    "  ip address 10.10.10.6 255.255.255.0\n"
+    "#\n"
+    "interface gigabitEthernet 1/0/3\n"
+    '  description "Buderus KNX10"\n'
+    "  switchport general allowed vlan 20 untagged\n"
+    "  switchport pvid 20\n"
+    "  no spanning-tree\n"
+    "#\n"
+    "interface gigabitEthernet 1/0/5\n"
+    '  description "TRUNK"\n'
+    "  switchport general allowed vlan 5,20,30,40 tagged\n"
+    "#\n"
+    "end\n"
+    "SG2005P-PD-1#\n"
+)
+
 
 def _device() -> Device:
     return Device(
@@ -89,9 +126,10 @@ def test_fetch_status_parses_system_info() -> None:
 
 
 def test_fetch_config_parses_vlans_and_ports() -> None:
-    runner = FakeSshRunner({"show running-config": _RUNNING_CONFIG})
+    runner = FakeSshRunner(shell_output=_RUNNING_CONFIG)
     device = _adapter(runner).fetch_config(_device())
 
+    assert runner.shell_invocations == [["enable", "show running-config"]]
     assert device.name == "core-switch"
     assert {v.vlan_id: v.name for v in device.vlans} == {1: "System-VLAN", 10: "Management"}
 
@@ -101,6 +139,30 @@ def test_fetch_config_parses_vlans_and_ports() -> None:
     assert ports[2].mode is PortMode.TRUNK
     assert ports[2].tagged_vlans == [1, 10]
     assert ports[2].enabled is False
+
+
+def test_fetch_config_parses_real_sg2005p_running_config() -> None:
+    runner = FakeSshRunner(shell_output=_REAL_RUNNING_CONFIG)
+    device = _adapter(runner).fetch_config(_device())
+
+    # Quoted hostname/VLAN names are unquoted.
+    assert device.name == "SG2005P-PD-1"
+    assert {v.vlan_id: v.name for v in device.vlans} == {
+        1: "System-VLAN",
+        20: "FB_LAN_Guest",
+        40: "FREIFUNK_CLIENT",
+    }
+
+    ports = {p.number: p for p in device.ports}
+    # `interface vlan 1` (the management SVI) must not become a physical port.
+    assert set(ports) == {3, 5}
+    # Untagged member -> access with that PVID.
+    assert ports[3].mode is PortMode.ACCESS
+    assert ports[3].pvid == 20
+    assert ports[3].tagged_vlans == []
+    # Tagged members -> trunk.
+    assert ports[5].mode is PortMode.TRUNK
+    assert ports[5].tagged_vlans == [5, 20, 30, 40]
 
 
 def test_fetch_clients_from_mac_table() -> None:
@@ -117,7 +179,7 @@ def test_fetch_config_is_authoritative_and_clears_stale_entries() -> None:
     # An empty running-config means the switch has no VLANs/ports configured.
     # A re-read is the single source of truth, so stale inventory entries must
     # be cleared rather than preserved.
-    runner = FakeSshRunner({"show running-config": "#\nend\n"})
+    runner = FakeSshRunner(shell_output="#\nend\n")
     device = _device()
     device.vlans = [Vlan(10, "Stale")]
     device.ports = [SwitchPort(number=1, name="Stale")]

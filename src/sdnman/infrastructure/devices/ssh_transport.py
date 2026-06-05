@@ -33,6 +33,14 @@ from ...domain.enums import DeviceKind
 _OPENWRT_DEFAULTS = {"port": 22, "username": "root", "password": "openwrt"}
 _JETSTREAM_DEFAULTS = {"port": 22, "username": "admin", "password": "admin"}
 
+# JetStream pager prompt shown for long output; answered with a space in _drain.
+_PAGER_RE = re.compile(r"Press any key to continue|--More--", re.IGNORECASE)
+
+# A returned CLI prompt ("hostname>", "hostname#", "hostname(config)#") sitting at
+# the end of the buffer with no trailing newline. Used to know a command finished
+# instead of guessing from an idle timeout, which races on slow switches.
+_PROMPT_RE = re.compile(r"\S+[>#][ \t]*\Z")
+
 # Paramiko's background transport thread logs unactionable tracebacks at ERROR
 # when a device is unreachable or drops the connection (e.g. "Error reading SSH
 # protocol banner", auth failures). We normalise every connection fault into a
@@ -85,7 +93,12 @@ class ParamikoSshRunner(SshCommandRunner):
     # -- connection lifecycle ------------------------------------------------
     def _connect(self):
         if self._client is not None:
-            return self._client
+            transport = self._client.get_transport()
+            if transport is not None and transport.is_active():
+                return self._client
+            # The peer dropped a previously-open connection (common on switches
+            # that close idle sessions); discard it and reconnect below.
+            self.close()
         try:
             import paramiko  # noqa: PLC0415 - lazy: only needed for real SSH
         except ImportError as exc:  # pragma: no cover - depends on environment
@@ -150,20 +163,35 @@ class ParamikoSshRunner(SshCommandRunner):
         # Drain the initial banner/prompt.
         collected.append(self._drain(channel))
         for command in commands:
-            channel.sendall(command.rstrip("\n") + "\n")
+            # CR-LF: real JetStream switches submit a CLI line on the carriage
+            # return; the LF gives line-oriented readers (the mock) a boundary.
+            channel.sendall(command.rstrip("\r\n") + "\r\n")
             collected.append(self._drain(channel))
         channel.close()
         return "".join(collected)
 
     @staticmethod
-    def _drain(channel, idle: float = 0.4, limit: float = 10.0) -> str:
-        """Read from a shell channel until it stays quiet for ``idle`` seconds."""
+    def _drain(channel, idle: float = 1.0, limit: float = 20.0) -> str:
+        """Read a shell channel until the CLI prompt returns (or it goes quiet).
+
+        Stopping on the returned prompt rather than a fixed idle window keeps
+        commands from being sent before a slow switch has finished the previous
+        one. JetStream switches page long output with a "Press any key to
+        continue" prompt; we answer it with a space so multi-page reads complete.
+        """
         chunks: list[str] = []
+        buf = ""
         deadline = time.monotonic() + limit
         last = time.monotonic()
         while time.monotonic() < deadline:
             if channel.recv_ready():
-                chunks.append(channel.recv(65536).decode("utf-8", "replace"))
+                chunk = channel.recv(65536).decode("utf-8", "replace")
+                chunks.append(chunk)
+                buf += chunk
+                if _PAGER_RE.search(chunk):
+                    channel.sendall(" ")
+                elif _PROMPT_RE.search(buf):
+                    break
                 last = time.monotonic()
             elif time.monotonic() - last >= idle:
                 break
@@ -284,8 +312,7 @@ class PersistentSshRunner(ParamikoSshRunner):
         with self._op_lock:
             try:
                 return super().run(command)
-            except SshError:
-                # One transparent reconnect, then retry once.
+            except Exception:  # noqa: BLE001 - dropped link: reconnect once, retry
                 self.close()
                 return super().run(command)
 
@@ -293,7 +320,7 @@ class PersistentSshRunner(ParamikoSshRunner):
         with self._op_lock:
             try:
                 return super().run_shell(commands)
-            except SshError:
+            except Exception:  # noqa: BLE001 - dropped link: reconnect once, retry
                 self.close()
                 return super().run_shell(commands)
 
