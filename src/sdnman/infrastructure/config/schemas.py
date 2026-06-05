@@ -49,7 +49,7 @@ class DeviceSchema(BaseModel):
     id: str
     name: str
     kind: str
-    mac: str
+    mac: str = ""
     model: str = ""
     ip: str | None = None
     firmware: str = ""

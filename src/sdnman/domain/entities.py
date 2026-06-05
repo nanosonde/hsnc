@@ -100,7 +100,7 @@ class Device:
     id: str
     name: str
     kind: DeviceKind
-    mac: MacAddress
+    mac: MacAddress | None = None
     model: str = ""
     ip: IpAddress | None = None
     status: DeviceStatus = DeviceStatus.UNKNOWN

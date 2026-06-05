@@ -30,6 +30,9 @@ coverage.xml
 # Local device inventory (copied from config/devices.yaml.example)
 /config/devices.yaml
 
+# Local environment / secrets
+.env
+
 # Editor / OS
 .vscode/
 .idea/

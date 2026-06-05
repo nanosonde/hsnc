@@ -26,6 +26,11 @@ _PROJECT_CONFIG = Path(__file__).resolve().parents[1] / "config"
 def repo(tmp_path) -> YamlConfigRepository:
     config_dir = tmp_path / "config"
     shutil.copytree(_PROJECT_CONFIG, config_dir)
+    # Tests run against the committed sample inventory, not any local trial
+    # devices.yaml (which is git-ignored and may be absent or minimal).
+    shutil.copyfile(
+        _PROJECT_CONFIG / "devices.yaml.example", config_dir / "devices.yaml"
+    )
     backup_dir = tmp_path / "config-backups"
     return YamlConfigRepository(config_dir, backup_dir=backup_dir)
 
