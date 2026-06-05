@@ -17,6 +17,7 @@ interactive session, because its CLI config mode is stateful).
 
 from __future__ import annotations
 
+import logging
 import os
 import re
 import threading
@@ -31,6 +32,15 @@ from ...domain.enums import DeviceKind
 # Platform defaults applied when a device's connection leaves a field blank.
 _OPENWRT_DEFAULTS = {"port": 22, "username": "root", "password": "openwrt"}
 _JETSTREAM_DEFAULTS = {"port": 22, "username": "admin", "password": "admin"}
+
+# Paramiko's background transport thread logs unactionable tracebacks at ERROR
+# when a device is unreachable or drops the connection (e.g. "Error reading SSH
+# protocol banner", auth failures). We normalise every connection fault into a
+# clean :class:`SshError` and already surface a readable WARNING ourselves, so we
+# raise the threshold to keep that internal chatter out of the application log.
+# Set SDNMAN_SSH_DEBUG=1 to restore paramiko's own logging while diagnosing.
+if not os.environ.get("SDNMAN_SSH_DEBUG"):
+    logging.getLogger("paramiko").setLevel(logging.CRITICAL)
 
 
 class SshError(RuntimeError):

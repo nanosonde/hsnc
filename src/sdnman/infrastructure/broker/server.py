@@ -15,12 +15,14 @@ import json
 import logging
 import os
 import socketserver
+import sys
 from http.server import BaseHTTPRequestHandler
 from pathlib import Path
 
 from ...domain.interfaces import ConfigRepository, DeviceAdapterFactory
 from ..config.mapping import device_to_config, merge
 from ..config.schemas import DeviceConfigSchema
+from ..devices.ssh_transport import SshError
 from .connection_pool import ConnectionPool
 
 _log = logging.getLogger("sdnman.broker.server")
@@ -106,6 +108,13 @@ class _Handler(BaseHTTPRequestHandler):
             self._send(200, body)
         except BrokerError as exc:
             self._send(exc.status, {"error": exc.message})
+        except SshError as exc:
+            # Expected, transient device-communication failure (unreachable /
+            # auth / dropped connection). The connection pool already logs the
+            # reachability state, so keep this to a one-line WARNING without a
+            # stacktrace and report it as an upstream (502) error.
+            _log.warning("Broker request failed: %s %s: %s", method, self.path, exc)
+            self._send(502, {"error": str(exc)})
         except Exception as exc:  # noqa: BLE001 - never leak a traceback to the client
             _log.exception("Broker request failed: %s %s", method, self.path)
             self._send(500, {"error": str(exc)})
@@ -157,6 +166,17 @@ class UnixHttpServer(socketserver.ThreadingMixIn, socketserver.UnixStreamServer)
             os.unlink(path)
         super().__init__(path, _Handler)
         os.chmod(path, 0o600)
+
+    def handle_error(self, request, client_address) -> None:  # type: ignore[override]
+        # A client that disconnects mid-response is routine (e.g. the web side
+        # timed out or gave up on an unreachable device), not a server fault.
+        # The default socketserver behaviour dumps a full stacktrace to stderr,
+        # which floods the log; log a single concise line instead.
+        exc = sys.exc_info()[1]
+        if isinstance(exc, (BrokenPipeError, ConnectionError)):
+            _log.debug("Broker client disconnected mid-request: %s", exc)
+        else:
+            _log.warning("Broker request handler error: %s", exc)
 
 
 def serve(socket_path: str | Path, api: BrokerApi) -> UnixHttpServer:
