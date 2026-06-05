@@ -27,6 +27,9 @@ coverage.xml
 /data/applied_config.json
 /data/config-backups/
 
+# Local device inventory (copied from config/devices.yaml.example)
+/config/devices.yaml
+
 # Editor / OS
 .vscode/
 .idea/

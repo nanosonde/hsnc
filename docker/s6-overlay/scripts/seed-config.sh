@@ -9,8 +9,10 @@ mkdir -p "${SDNMAN_CONFIG_DIR}" "${SDNMAN_DATA_DIR}"
 if [ -d /app/seed-config ]; then
   for f in /app/seed-config/*; do
     name="$(basename "$f")"
-    if [ ! -e "${SDNMAN_CONFIG_DIR}/${name}" ]; then
-      cp "$f" "${SDNMAN_CONFIG_DIR}/${name}"
+    # Templates (e.g. devices.yaml.example) seed the real file name.
+    target="${name%.example}"
+    if [ ! -e "${SDNMAN_CONFIG_DIR}/${target}" ]; then
+      cp "$f" "${SDNMAN_CONFIG_DIR}/${target}"
     fi
   done
 fi

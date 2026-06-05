@@ -1,4 +1,11 @@
-# Declarative device inventory.
+# Example declarative device inventory.
+#
+# Copy this file to `devices.yaml` and edit it for your environment:
+#     cp config/devices.yaml.example config/devices.yaml
+#
+# In Docker the seed-config step copies this template to `devices.yaml`
+# automatically on first run if one is not already present.
+#
 # kind: gateway | switch | access_point
 devices:
   - id: gateway-1

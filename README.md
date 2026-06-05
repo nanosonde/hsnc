@@ -169,11 +169,22 @@ sdnman-ctl backup import ./backup.zip
 
 YAML files live in `SDNMAN_CONFIG_DIR` (default `./config`, or `/data/config` in Docker):
 
-| File           | Purpose                                   |
-| -------------- | ----------------------------------------- |
-| `site.yaml`    | Single site definition                    |
-| `users.yaml`   | Controller users (hashed passwords, roles)|
-| `devices.yaml` | Declarative device inventory (incl. VLANs)|
+| File                   | Purpose                                   |
+| ---------------------- | ----------------------------------------- |
+| `site.yaml`            | Single site definition                    |
+| `users.yaml`           | Controller users (hashed passwords, roles)|
+| `devices.yaml`         | Declarative device inventory (incl. VLANs)|
+| `devices.yaml.example` | Template inventory; copy to `devices.yaml`|
+
+`devices.yaml` is environment-specific and ignored by git. Create it from the
+shipped template before running locally:
+
+```bash
+cp config/devices.yaml.example config/devices.yaml
+```
+
+In Docker this copy happens automatically: the seed step writes `devices.yaml`
+from the baked-in template on first run if one does not already exist.
 
 ### Environment variables
 
