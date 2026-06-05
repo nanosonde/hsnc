@@ -7,6 +7,12 @@ import copy
 from sdnman.application.use_cases.config_diff import GetConfigDiff
 from sdnman.application.use_cases.revert_config import RevertPendingChanges
 from sdnman.domain.entities import Vlan
+from sdnman.infrastructure.config.applied_config_store import CurrentConfigStore
+from sdnman.infrastructure.config.device_config_store import JsonDeviceConfigStore
+from sdnman.infrastructure.config.layered_config_repository import (
+    LayeredConfigRepository,
+)
+from sdnman.infrastructure.config.yaml_config_repository import YamlConfigRepository
 
 from .fakes import FakeAppliedConfigStore, FakeConfigWriter
 
@@ -40,3 +46,64 @@ def test_revert_skips_unchanged_devices(config, devices):
     reverted = RevertPendingChanges(config, applied, writer).execute()
     assert reverted == 0
     assert writer.saved == []
+
+
+def _real_repo(tmp_path):
+    """Wire the real layered repo + current-config store with no baseline file."""
+    config_dir = tmp_path / "config"
+    config_dir.mkdir()
+    (config_dir / "site.yaml").write_text("name: Test\n")
+    (config_dir / "users.yaml").write_text("users: []\n")
+    (config_dir / "devices.yaml").write_text(
+        "devices:\n"
+        "  - id: ap-1\n    name: AP 1\n    kind: access_point\n    site_id: s1\n"
+        "  - id: switch-1\n    name: Switch 1\n    kind: switch\n    site_id: s1\n"
+    )
+    profiles = YamlConfigRepository(config_dir, backup_dir=tmp_path / "backups")
+    desired = JsonDeviceConfigStore(tmp_path / "desired_config.json")
+    current = JsonDeviceConfigStore(tmp_path / "current_config.json")
+    config = LayeredConfigRepository(profiles, desired, current)
+    applied = CurrentConfigStore(tmp_path, profiles, store=current)
+    return config, applied, current
+
+
+def test_revert_all_discards_edits_without_baseline(tmp_path):
+    """Revert clears staged edits even when current_config.json was never written."""
+    config, applied, current = _real_repo(tmp_path)
+    assert not current.exists()
+
+    ap = config.get_device("ap-1")
+    ap.ssids.append("Test123")
+    config.save_device(ap)
+    sw = config.get_device("switch-1")
+    sw.vlans.append(Vlan(vlan_id=456, name="Test", subnet=""))
+    config.save_device(sw)
+
+    diff = GetConfigDiff(config, applied)
+    assert diff.execute().has_changes
+
+    reverted = RevertPendingChanges(config, applied, config).execute()
+    assert reverted == 2
+    assert diff.execute().has_changes is False
+    assert config.get_device("ap-1").ssids == []
+    assert config.get_device("switch-1").vlans == []
+
+
+def test_revert_single_device_without_baseline(tmp_path):
+    """Per-device revert only touches the selected device when there is no baseline."""
+    config, applied, _ = _real_repo(tmp_path)
+
+    ap = config.get_device("ap-1")
+    ap.ssids.append("Test123")
+    config.save_device(ap)
+    sw = config.get_device("switch-1")
+    sw.vlans.append(Vlan(vlan_id=456, name="Test", subnet=""))
+    config.save_device(sw)
+
+    reverted = RevertPendingChanges(config, applied, config).execute(
+        device_ids=["switch-1"]
+    )
+    assert reverted == 1
+    # switch reverted, ap edit retained
+    assert config.get_device("switch-1").vlans == []
+    assert config.get_device("ap-1").ssids == ["Test123"]

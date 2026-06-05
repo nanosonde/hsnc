@@ -40,9 +40,12 @@ class CurrentConfigStore(AppliedConfigStore):
         return self._store
 
     def load(self) -> list[Device]:
-        if not self._store.exists():
-            return []
-        configs = self._store.load()
+        # Synthesise a bare entry (profile, no payload) for every known device,
+        # even before the first baseline is written. This keeps the snapshot in
+        # step with the inventory so a device is never spuriously diffed as a
+        # whole "added" device (which would also make it impossible to revert)
+        # when current_config.json is missing or omits it.
+        configs = self._store.load() if self._store.exists() else {}
         return [merge(p, configs.get(p.id)) for p in self._profiles.list_devices()]
 
     def save(self, devices: list[Device]) -> None:
