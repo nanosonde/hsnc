@@ -5,17 +5,20 @@ set -e
 
 mkdir -p "${SDNMAN_CONFIG_DIR}" "${SDNMAN_DATA_DIR}"
 
+MOCK="${SDNMAN_USE_MOCK_DEVICES:-1}"
+
 # Copy baked-in config into the volume only if not already present (idempotent).
-# devices.yaml.example holds connection profiles only; desired_config.json.example
-# is the demo CONFIG payload and belongs in the data dir, not the config dir, so
-# it is handled separately below.
+# devices.yaml is handled separately below (its seeding depends on the mode), and
+# desired_config.json.example is the demo CONFIG payload that belongs in the data
+# dir rather than the config dir, so both are skipped in this generic loop.
 if [ -d /app/seed-config ]; then
   for f in /app/seed-config/*; do
     name="$(basename "$f")"
     case "$name" in
       desired_config.json.example) continue ;;
+      devices.yaml.example) continue ;;
     esac
-    # Templates (e.g. devices.yaml.example) seed the real file name.
+    # Templates (e.g. site.yaml, users.yaml) seed the real file name.
     target="${name%.example}"
     if [ ! -e "${SDNMAN_CONFIG_DIR}/${target}" ]; then
       cp "$f" "${SDNMAN_CONFIG_DIR}/${target}"
@@ -23,12 +26,28 @@ if [ -d /app/seed-config ]; then
   done
 fi
 
-# In mock mode, seed the demo configuration payload so the UI shows sample
-# VLANs/ports/SSIDs out of the box. Real deployments leave this empty: the
-# Device Broker reads the live baseline into current_config.json on start.
-case "${SDNMAN_USE_MOCK_DEVICES:-1}" in
-  0 | false | False) ;;
+# Device inventory (devices.yaml) and demo payload depend on the mode.
+case "${MOCK}" in
+  0 | false | False)
+    # Real-device deployment: the operator MUST supply their own inventory. We
+    # never seed the bundled example here -- instead fail fast with guidance so a
+    # misconfigured deployment does not silently start with no/sample devices.
+    if [ ! -f "${SDNMAN_CONFIG_DIR}/devices.yaml" ]; then
+      echo "FATAL: ${SDNMAN_CONFIG_DIR}/devices.yaml is missing." >&2
+      echo "Real-device mode (SDNMAN_USE_MOCK_DEVICES=0) requires a device" >&2
+      echo "inventory. Create one from config/devices.yaml.example, then mount" >&2
+      echo "it at ${SDNMAN_CONFIG_DIR}/devices.yaml (see docker-compose.yml)." >&2
+      exit 1
+    fi
+    ;;
   *)
+    # Mock/demo mode: seed the sample inventory and the demo configuration
+    # payload so the UI shows sample devices, VLANs, ports and SSIDs out of the
+    # box without any hardware.
+    if [ ! -e "${SDNMAN_CONFIG_DIR}/devices.yaml" ] \
+       && [ -f /app/seed-config/devices.yaml.example ]; then
+      cp /app/seed-config/devices.yaml.example "${SDNMAN_CONFIG_DIR}/devices.yaml"
+    fi
     if [ -f /app/seed-config/desired_config.json.example ] \
        && [ ! -e "${SDNMAN_DATA_DIR}/desired_config.json" ]; then
       cp /app/seed-config/desired_config.json.example \
@@ -39,4 +58,6 @@ esac
 
 # A freshly mounted named volume is root-owned; hand it to the runtime user so
 # both the web and broker services (which drop privileges) can read and write it.
-chown -R appuser:appuser "${SDNMAN_DATA_DIR}" || true
+# stderr is silenced because a read-only bind-mounted devices.yaml cannot be
+# chowned and that warning is expected, not an error.
+chown -R appuser:appuser "${SDNMAN_DATA_DIR}" 2>/dev/null || true

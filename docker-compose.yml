@@ -8,15 +8,25 @@ services:
     environment:
       # Change this to a strong random value in production.
       SDNMAN_SECRET_KEY: "change-me-in-production"
-      SDNMAN_USE_MOCK_DEVICES: "1"
+      # Real devices. The container will refuse to start unless you provide your
+      # own config/devices.yaml (mounted below). For a hardware-free demo, build
+      # the image and run it with SDNMAN_USE_MOCK_DEVICES=1 instead.
+      SDNMAN_USE_MOCK_DEVICES: "0"
       SDNMAN_POLL_INTERVAL: "30"
       SDNMAN_RETENTION_DAYS: "30"
       # On startup the Device Broker reads each device's live config as the
       # history baseline. Set to "0" if the controller is the sole source of
       # truth and devices are never changed out-of-band.
       SDNMAN_BASELINE_ON_START: "1"
+      # SSH passwords are read from the environment, never from devices.yaml.
+      # SDNMAN_OPENWRT_SSH_PASSWORD: "..."
+      # SDNMAN_JETSTREAM_SSH_PASSWORD: "..."
     volumes:
       - controller-data:/data
+      # Your device inventory (connection profiles only). Create it first:
+      #   cp config/devices.yaml.example config/devices.yaml   # then edit
+      # The container fails fast if this file is missing.
+      - ./config/devices.yaml:/data/config/devices.yaml:ro
     restart: unless-stopped
 
 volumes:

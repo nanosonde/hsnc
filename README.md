@@ -12,12 +12,14 @@ access points** and **JetStream managed switches** (with VLANs).
 - **Architecture:** Clean Architecture (domain / application / infrastructure / presentation)
 - **Packaging:** Docker container running supervised processes (web + Device Broker) via s6-overlay
 
-> **Status:** By default the runtime/monitoring plane is served by a built-in
-> **mock provider**, so the UI is fully usable without hardware. VLAN, port and
-> wireless editing plus the review/apply workflow work end-to-end. The real device
-> drivers (OpenWrt SSH/UCI and JetStream SSH/CLI) are **fully implemented** and
-> exercised by the test suite against the throwaway mock SSH containers in
-> [`mocks/`](mocks/); switch to them by setting `SDNMAN_USE_MOCK_DEVICES=0`.
+> **Status:** The real device drivers (OpenWrt SSH/UCI and JetStream SSH/CLI) are
+> **fully implemented** and exercised by the test suite against the throwaway mock
+> SSH containers in [`mocks/`](mocks/). The bundled `docker-compose.yml` targets
+> real hardware (`SDNMAN_USE_MOCK_DEVICES=0`) and requires your own
+> `config/devices.yaml`. For a hardware-free trial, set `SDNMAN_USE_MOCK_DEVICES=1`
+> to serve the runtime/monitoring plane from a built-in **mock provider** with a
+> sample inventory — VLAN, port and wireless editing plus the review/apply
+> workflow then work end-to-end without any devices.
 
 ## Architecture
 
@@ -108,9 +110,25 @@ sdnman-ctl backup import ./backup.zip
 
 ## Quick start (Docker)
 
+The bundled `docker-compose.yml` runs against **real devices** and will refuse to
+start until you supply your own inventory. Create it from the template first:
+
 ```bash
-docker compose up --build
+cp config/devices.yaml.example config/devices.yaml   # then edit for your network
+docker compose up --build                            # or: make up
 # open http://<host>:8080
+```
+
+`config/devices.yaml` is bind-mounted into the container (read-only); SSH
+passwords come from the environment (see the env table), never from the YAML. If
+`config/devices.yaml` is missing the container exits with a clear error.
+
+For a **hardware-free demo**, build the image and run it with mock devices
+instead (seeds a sample inventory automatically):
+
+```bash
+docker build -t sdn-manager:latest .
+docker run --rm -p 8080:8080 -e SDNMAN_USE_MOCK_DEVICES=1 sdn-manager:latest
 ```
 
 Default logins (change immediately): `admin` / `admin` and `viewer` / `viewer`.

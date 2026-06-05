@@ -25,7 +25,8 @@ ENV PYTHONUNBUFFERED=1 \
     SDNMAN_POLL_INTERVAL=30 \
     SDNMAN_RETENTION_DAYS=30 \
     SDNMAN_BASELINE_ON_START=1 \
-    SDNMAN_BROKER_SOCKET=/data/broker.sock
+    SDNMAN_BROKER_SOCKET=/data/broker.sock \
+    S6_BEHAVIOUR_IF_STAGE2_FAILS=2
 
 # s6-overlay supervises the long-running processes (web + broker) in a single
 # container. Pinned; x86_64 only (adjust the arch tarball for other platforms).
@@ -47,7 +48,9 @@ RUN useradd --create-home --uid 10001 appuser
 WORKDIR /app
 
 COPY --from=build /dist/*.whl /tmp/
-RUN python -m pip install --no-cache-dir /tmp/*.whl gunicorn && rm -f /tmp/*.whl
+# Install the wheel with the [ssh] extra so real-device mode (paramiko) works
+# out of the box; gunicorn is already a base dependency.
+RUN python -m pip install --no-cache-dir "$(ls /tmp/*.whl)[ssh]" && rm -f /tmp/*.whl
 
 # Seed configuration baked into the image; copied into the volume on first run.
 COPY config /app/seed-config
