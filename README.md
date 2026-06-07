@@ -130,13 +130,15 @@ start until you supply your own inventory. Create it from the template first:
 
 ```bash
 cp config/devices.yaml.example config/devices.yaml   # then edit for your network
+cp .env.example .env                                 # then set secrets/passwords
 docker compose up --build                            # or: make up
 # open http://<host>:8080
 ```
 
 `config/devices.yaml` is bind-mounted into the container (read-only); SSH
-passwords come from the environment (see the env table), never from the YAML. If
-`config/devices.yaml` is missing the container exits with a clear error.
+passwords come from the environment (see the env table and `.env.example`), never
+from the YAML. If `config/devices.yaml` is missing the container exits with a
+clear error.
 
 For a **hardware-free demo**, build the image and run it with mock devices
 instead (seeds a sample inventory automatically):
