@@ -11,11 +11,11 @@ This is a **device simulator**, not part of the application. The future real
 ## Build & run (standalone)
 
 ```sh
-docker build -t mock-openwrt mocks/openwrt
+docker build -t mock-openwrt fakes/openwrt
 docker run --rm -p 2201:22 --name mock-openwrt mock-openwrt
 ```
 
-Or via the bundled compose file (recommended): see `mocks/README.md`.
+Or via the bundled compose file (recommended): see `fakes/README.md`.
 
 ## Connect
 

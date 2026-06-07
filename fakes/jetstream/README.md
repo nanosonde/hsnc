@@ -11,11 +11,11 @@ emits.
 ## Build & run (standalone)
 
 ```sh
-docker build -t mock-jetstream mocks/jetstream
+docker build -t mock-jetstream fakes/jetstream
 docker run --rm -p 2202:22 --name mock-jetstream mock-jetstream
 ```
 
-Or via the bundled compose file (recommended): see `mocks/README.md`.
+Or via the bundled compose file (recommended): see `fakes/README.md`.
 
 ## Connect
 

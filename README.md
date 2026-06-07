@@ -13,8 +13,8 @@ access points** and **JetStream managed switches** (with VLANs).
 - **Packaging:** Docker container running supervised processes (web + Device Broker) via s6-overlay
 
 > **Status:** The real device drivers (OpenWrt SSH/UCI and JetStream SSH/CLI) are
-> **fully implemented** and exercised by the test suite against the throwaway mock
-> SSH containers in [`mocks/`](mocks/). The bundled `docker-compose.yml` targets
+> **fully implemented** and exercised by the test suite against the throwaway fake
+> SSH containers in [`fakes/`](fakes/). The bundled `docker-compose.yml` targets
 > real hardware (`SDNMAN_USE_MOCK_DEVICES=0`) and requires your own
 > `config/devices.yaml`. For a hardware-free trial, set `SDNMAN_USE_MOCK_DEVICES=1`
 > to serve the runtime/monitoring plane from a built-in **mock provider** with a
@@ -167,11 +167,11 @@ list):
 make check        # fast syntax compile-check of all sources
 make lint         # ruff
 make unit         # unit tests (pytest)
-make integration  # smoke test against the mock SSH containers (needs docker)
+make integration  # smoke test against the fake SSH containers (needs docker)
 make test         # unit + integration
 make all          # check + lint + test
-make mocks-up     # build & start the mock SSH devices (detached)
-make mocks-down   # stop and remove the mock devices
+make fakes-up     # build & start the fake SSH devices (detached)
+make fakes-down   # stop and remove the fake devices
 make docker-build # build the production image
 make docker-clean # remove the production image
 ```

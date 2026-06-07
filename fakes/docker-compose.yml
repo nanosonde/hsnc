@@ -7,9 +7,9 @@
 #   mock-jetstream  JetStream switch   -> ssh -p 2202 admin@localhost  (pw: admin)
 #
 # Usage:
-#   docker compose -f mocks/docker-compose.yml up -d --build
-#   docker compose -f mocks/docker-compose.yml down            # keep state volumes
-#   docker compose -f mocks/docker-compose.yml down -v         # wipe state volumes
+#   docker compose -f fakes/docker-compose.yml up -d --build
+#   docker compose -f fakes/docker-compose.yml down            # keep state volumes
+#   docker compose -f fakes/docker-compose.yml down -v         # wipe state volumes
 
 services:
   mock-openwrt:

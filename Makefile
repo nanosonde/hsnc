@@ -10,15 +10,15 @@ PYTHON ?= $(shell if [ -x .venv/bin/python ]; then echo .venv/bin/python; else e
 PYBIN  := $(dir $(abspath $(PYTHON)))
 
 SRC_DIRS      := src tests
-SMOKE_TEST    := mocks/smoke_test.sh
-MOCKS_COMPOSE := mocks/docker-compose.yml
+SMOKE_TEST    := fakes/smoke_test.sh
+FAKES_COMPOSE := fakes/docker-compose.yml
 COMPOSE       := docker-compose.yml
 DOCKER        ?= docker
 IMAGE         ?= sdn-manager:latest
 
 .DEFAULT_GOAL := help
 
-.PHONY: help check lint unit integration test all clean up down logs mocks-up mocks-down docker-build docker-clean
+.PHONY: help check lint unit integration test all clean up down logs fakes-up fakes-down docker-build docker-clean
 
 help: ## Show this help.
 	@echo "sdn-manager make targets:"
@@ -35,7 +35,7 @@ lint: ## Lint sources with ruff.
 unit: ## Run the unit test suite (pytest).
 	$(PYTHON) -m pytest
 
-integration: ## Run integration tests against the mock SSH devices (needs docker + paramiko).
+integration: ## Run integration tests against the fake SSH devices (needs docker + paramiko).
 	PATH="$(PYBIN):$$PATH" bash $(SMOKE_TEST)
 
 up: ## Build and start the application container (end users); UI on http://localhost:8080.
@@ -48,11 +48,11 @@ down: ## Stop and remove the application container (data volume is kept).
 logs: ## Follow the application container logs (Ctrl-C to stop).
 	$(DOCKER) compose -f $(COMPOSE) logs -f
 
-mocks-up: ## Build and start the mock SSH device containers (detached).
-	$(DOCKER) compose -f $(MOCKS_COMPOSE) up -d --build
+fakes-up: ## Build and start the fake SSH device containers (detached).
+	$(DOCKER) compose -f $(FAKES_COMPOSE) up -d --build
 
-mocks-down: ## Stop and remove the mock SSH device containers and their volumes.
-	$(DOCKER) compose -f $(MOCKS_COMPOSE) down -v
+fakes-down: ## Stop and remove the fake SSH device containers and their volumes.
+	$(DOCKER) compose -f $(FAKES_COMPOSE) down -v
 
 docker-build: ## Build the application Docker image (override name with IMAGE=...).
 	$(DOCKER) build -t $(IMAGE) .

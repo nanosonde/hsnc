@@ -19,7 +19,7 @@ surface emitted and consumed by the renderers and the SSH adapters:
 
 ```sh
 # Build & start both mocks
-docker compose -f mocks/docker-compose.yml up -d --build
+docker compose -f fakes/docker-compose.yml up -d --build
 
 # OpenWrt: read board info, round-trip a config change
 ssh -p 2201 root@localhost 'ubus call system board'
@@ -31,8 +31,8 @@ printf 'enable\nconfigure\nvlan 99\nname lab\nend\ncopy running-config startup-c
   | ssh -p 2202 admin@localhost
 
 # Stop (keep state) / wipe state
-docker compose -f mocks/docker-compose.yml down
-docker compose -f mocks/docker-compose.yml down -v
+docker compose -f fakes/docker-compose.yml down
+docker compose -f fakes/docker-compose.yml down -v
 ```
 
 > First connection prints an SSH host-key warning. For scripted access use
@@ -89,7 +89,7 @@ Set via env in `docker-compose.yml` (or `.env`):
 then tears everything down:
 
 ```sh
-mocks/smoke_test.sh
+fakes/smoke_test.sh
 ```
 
 It requires Docker + Docker Compose and `pip install paramiko`.
