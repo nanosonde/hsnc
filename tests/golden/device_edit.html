@@ -1,0 +1,154 @@
+<!DOCTYPE html>
+
+<html lang="en">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>Edit TL-SG2210P · sdn-manager</title>
+  <link rel="stylesheet" href="/static/css/app.css" />
+  <script src="/static/js/htmx.min.js" defer></script>
+</head>
+<body>
+
+
+<div class="app" id="app-shell">
+  <script>try{if(localStorage.getItem("sdnman.nav.collapsed")==="1")document.getElementById("app-shell").classList.add("nav-collapsed");}catch(e){}</script>
+  <header class="topbar">
+    <div class="brand">
+      <svg class="globe" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="9"/><path d="M3 12h18"/><path d="M12 3c2.4 2.6 2.4 15.4 0 18M12 3c-2.4 2.6-2.4 15.4 0 18"/></svg>
+      <span class="site-name">Default</span>
+    </div>
+    <div class="spacer"></div>
+    <div class="readonly-control" title="Read-only mode blocks applying configuration to devices">
+      
+      
+      <form method="post" action="/system/read-only" class="switch-form">
+        <span class="switch-text">Read-only mode</span>
+        <label class="switch">
+          <input type="checkbox" name="enabled" onchange="this.form.submit()" checked aria-label="Toggle read-only mode">
+          <span class="switch-track"><span class="switch-thumb"></span></span>
+        </label>
+      </form>
+      
+    </div>
+    <div class="user">
+      <span>Administrator</span>
+      <span class="badge-role">admin</span>
+      <form method="post" action="/logout">
+        <button class="btn" type="submit">Logout</button>
+      </form>
+    </div>
+  </header>
+
+  <nav class="sidebar">
+    <div class="sidebar-head">
+      <button type="button" class="nav-toggle" id="nav-toggle" title="Collapse sidebar" aria-label="Toggle sidebar">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><path d="M4 6h16M4 12h10M4 18h16"/><path d="M19 9l3 3-3 3"/></svg>
+      </button>
+    </div>
+    <div class="nav-section">Monitoring</div>
+    <a class="nav-item " href="/" title="Dashboard">
+      <svg viewBox="0 0 20 20" fill="none"><path d="M4.81451 15.8521C3.48744 14.525 2.66663 12.6917 2.66663 10.6666C2.66663 6.61655 5.94986 3.33331 9.99996 3.33331C14.0501 3.33331 17.3333 6.61655 17.3333 10.6666C17.3333 12.6917 16.5125 14.525 15.1854 15.8521" stroke="currentColor" stroke-width="1.2" stroke-linecap="round" stroke-linejoin="round"/><path d="M6.70021 13.9665C5.85571 13.122 5.33337 11.9553 5.33337 10.6667C5.33337 8.08933 7.42271 6 10 6" stroke="currentColor" stroke-width="1.2" stroke-linecap="round"/><path d="M10 10.6667V8" stroke="currentColor" stroke-width="1.2" stroke-linecap="round" stroke-linejoin="round"/></svg>
+      <span class="nav-label">Dashboard</span>
+    </a>
+    <a class="nav-item active" href="/devices" title="Devices">
+      <svg viewBox="0 0 20 20" fill="none"><circle cx="10" cy="10" r="7.4" stroke="currentColor" stroke-width="1.2"/><circle cx="10" cy="10" r="2.76842" stroke="currentColor" stroke-width="1.2"/></svg>
+      <span class="nav-label">Devices</span>
+    </a>
+    <a class="nav-item " href="/clients" title="Clients">
+      <svg viewBox="0 0 20 20" fill="none"><path d="M2.30151 11.5V5.2208C2.30151 4.33552 3.01917 3.61786 3.90445 3.61786H15.125C16.0103 3.61786 16.728 4.33552 16.728 5.2208V6" stroke="currentColor" stroke-width="1.2" stroke-linecap="round"/><path fill-rule="evenodd" clip-rule="evenodd" d="M12.2498 7.37097C11.45 7.37097 10.8016 8.01936 10.8016 8.81919V9.00002C10.8016 9.3314 11.0702 9.60002 11.4016 9.60002C11.7329 9.60002 12.0016 9.3314 12.0016 9.00002V8.81919C12.0016 8.68211 12.1127 8.57097 12.2498 8.57097H16.703C16.8401 8.57097 16.9512 8.68211 16.9512 8.8192V15.1809C16.9512 15.318 16.8401 15.4291 16.703 15.4291H15.5C15.1686 15.4291 14.9 15.6977 14.9 16.0291C14.9 16.3605 15.1686 16.6291 15.5 16.6291H16.703C17.5028 16.6291 18.1512 15.9807 18.1512 15.1809V8.8192C18.1512 8.01936 17.5028 7.37097 16.703 7.37097H12.2498ZM10.3413 10.4C9.54146 10.4 8.89307 11.0484 8.89307 11.8482V15.1809C8.89307 15.9807 9.54146 16.6291 10.3413 16.6291H12.4618C13.2617 16.6291 13.9101 15.9807 13.9101 15.1809V11.8482C13.9101 11.0484 13.2617 10.4 12.4618 10.4H10.3413ZM10.0931 11.8482C10.0931 11.7112 10.2042 11.6 10.3413 11.6H12.4618C12.5989 11.6 12.7101 11.7112 12.7101 11.8482V15.1809C12.7101 15.318 12.5989 15.4291 12.4618 15.4291H10.3413C10.2042 15.4291 10.0931 15.318 10.0931 15.1809V11.8482Z" fill="currentColor"/><path d="M7.51103 14H2.24417C1.89155 14 1.65353 14.3602 1.7918 14.6846C2.10088 15.4097 2.81303 15.8803 3.6013 15.8803H7.51103" stroke="currentColor" stroke-width="1.2" stroke-linecap="round"/></svg>
+      <span class="nav-label">Clients</span>
+    </a>
+    <a class="nav-item " href="/topology" title="Topology">
+      <svg viewBox="0 0 20 20" fill="none"><path fill-rule="evenodd" clip-rule="evenodd" d="M2.23486 2.79703C2.40721 2.68675 2.62388 2.67191 2.80966 2.75765L7.40447 4.87834L12.3684 2.75094C12.5246 2.684 12.7019 2.68644 12.8562 2.75765L17.6934 4.99021C17.9059 5.08828 18.0419 5.30096 18.0419 5.53499V16.6978C18.0419 16.9024 17.9377 17.0929 17.7653 17.2032C17.593 17.3135 17.3763 17.3283 17.1905 17.2426L12.5957 15.1219L7.63179 17.2493C7.47558 17.3162 7.29831 17.3138 7.144 17.2426L2.30679 15.01C2.0943 14.9119 1.95823 14.6993 1.95823 14.4652V3.30243C1.95823 3.09782 2.0625 2.90731 2.23486 2.79703ZM7.99539 5.93065L12.0048 4.21233V14.0696L7.99539 15.7879V5.93065ZM6.79539 5.91887L3.15823 4.24018V14.0813L6.79539 15.76V5.91887ZM16.8419 15.76L13.2048 14.0813V4.2402L16.8419 5.91889V15.76Z" fill="currentColor"/></svg>
+      <span class="nav-label">Topology</span>
+    </a>
+
+    <div class="nav-section">Configuration</div>
+    <a class="nav-item " href="/config/pending" title="Pending Changes">
+      <svg viewBox="0 0 20 20" fill="none"><path d="M3 6h10M3 14h6" stroke="currentColor" stroke-width="1.2" stroke-linecap="round"/><circle cx="15" cy="6" r="2" stroke="currentColor" stroke-width="1.2"/><circle cx="11" cy="14" r="2" stroke="currentColor" stroke-width="1.2"/></svg>
+      <span class="nav-label">Pending Changes</span>
+    </a>
+    <a class="nav-item " href="/config/history" title="Apply History">
+      <svg viewBox="0 0 20 20" fill="none"><path d="M3 10a7 7 0 1 0 2.05-4.95M3 5v2.5h2.5" stroke="currentColor" stroke-width="1.2" stroke-linecap="round" stroke-linejoin="round"/><path d="M10 6.5V10l2.5 1.5" stroke="currentColor" stroke-width="1.2" stroke-linecap="round" stroke-linejoin="round"/></svg>
+      <span class="nav-label">Apply History</span>
+    </a>
+
+    <div class="nav-section">Tools</div>
+    <a class="nav-item " href="/backup" title="Backup">
+      <svg viewBox="0 0 24 24" fill="none"><g stroke="currentColor" stroke-width="1.8" fill="none" fill-rule="evenodd" stroke-linejoin="round"><path d="M3 4.444c0-.521.424-.944.947-.944h5.685L12 6.333h8.053c.523 0 .947.423.947.945v12.278a.946.946 0 0 1-.947.944H3.947A.946.946 0 0 1 3 19.556V4.444ZM3 10.367h18"/></g></svg>
+      <span class="nav-label">Backup</span>
+    </a>
+  </nav>
+
+  <div class="main">
+    <main class="content">
+      
+      
+        
+      
+      
+<a href="/devices/switch-1" class="muted">&larr; TL-SG2210P</a>
+
+<div class="card card-pad" style="margin-top:10px">
+  <h3 class="card-title">Edit TL-SG2210P
+    <span class="pill">switch</span>
+  </h3>
+  <p class="muted">Changes are saved to YAML and backed up automatically. Use
+    <a href="/config/pending">Pending Changes</a> to review and apply.</p>
+</div>
+
+
+
+<div class="card card-pad" style="margin-top:16px">
+  <h3 class="card-title">VLANs</h3>
+  <div class="table-wrap">
+    <table class="data">
+      <thead><tr><th>VLAN ID</th><th>Name</th><th>Subnet</th><th></th></tr></thead>
+      <tbody>
+        
+        <tr><td colspan="4" class="muted">No VLANs defined.</td></tr>
+        
+      </tbody>
+    </table>
+  </div>
+
+  <h4 class="section-title">Add / Update VLAN</h4>
+  <form method="post" action="/devices/switch-1/vlans" class="toolbar">
+    <div class="field" style="margin:0">
+      <label>VLAN ID</label>
+      <input name="vlan_id" type="number" min="1" max="4094" required style="width:110px" />
+    </div>
+    <div class="field" style="margin:0">
+      <label>Name</label>
+      <input name="name" required />
+    </div>
+    <div class="field" style="margin:0">
+      <label>Subnet</label>
+      <input name="subnet" placeholder="192.168.10.0/24"
+             pattern="^\s*([0-9]{1,3}\.){3}[0-9]{1,3}/([0-9]|[12][0-9]|3[0-2])\s*$|^\s*([0-9a-fA-F:]+)/(1[0-2][0-8]|[1-9]?[0-9])\s*$"
+             title="Enter a subnet in CIDR notation, e.g. 192.168.10.0/24 or 2001:db8::/64" />
+    </div>
+    <button class="btn btn-primary" type="submit" style="align-self:flex-end">Save VLAN</button>
+  </form>
+</div>
+
+
+
+
+
+
+
+
+
+
+
+
+
+    </main>
+  </div>
+</div>
+<script src="/static/js/ui.js"></script>
+
+</body>
+</html>

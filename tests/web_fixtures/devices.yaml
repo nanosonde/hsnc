@@ -1,0 +1,46 @@
+# Fixed test inventory matching the deterministic mock monitoring data
+# (gateway-1, switch-1, ap-1 have demo status/clients; switch-2 defaults to connected).
+devices:
+  - id: gateway-1
+    name: ER605
+    kind: gateway
+    ip: 192.168.50.254
+    site_id: default
+    connection:
+      username: root
+      port: 22
+    monitoring:
+      type: ssh
+
+  - id: switch-1
+    name: TL-SG2210P
+    kind: switch
+    ip: 192.168.50.2
+    site_id: default
+    connection:
+      username: admin
+      port: 22
+    monitoring:
+      type: ssh
+
+  - id: ap-1
+    name: EAP245
+    kind: access_point
+    ip: 192.168.50.3
+    site_id: default
+    connection:
+      username: root
+      port: 22
+    monitoring:
+      type: ssh
+
+  - id: switch-2
+    name: GS1900-OWRT
+    kind: switch
+    ip: 192.168.50.4
+    site_id: default
+    connection:
+      username: root
+      port: 22
+    monitoring:
+      type: ssh

@@ -32,7 +32,7 @@ _TEMPLATES = Path(__file__).resolve().parent / "templates"
 _STATIC = Path(__file__).resolve().parent / "static"
 
 
-def create_app(settings: Settings | None = None) -> Flask:
+def create_app(settings: Settings | None = None, container: Container | None = None) -> Flask:
     settings = settings or settings_from_env()
 
     app = Flask(
@@ -41,7 +41,7 @@ def create_app(settings: Settings | None = None) -> Flask:
         static_folder=str(_STATIC),
     )
     app.config["SECRET_KEY"] = os.environ.get("SDNMAN_SECRET_KEY", "dev-insecure-change-me")
-    app.config["CONTAINER"] = Container(settings)
+    app.config["CONTAINER"] = container or Container(settings)
     app.config["SETTINGS"] = settings
     app.config["READ_ONLY"] = True
 
