@@ -4,7 +4,7 @@ A throwaway container that behaves like a TP-Link JetStream smart switch for the
 sdn-manager switch adapter. It runs a real `sshd` whose login shell is a fake
 JetStream CLI REPL backed by a persisted running/startup config.
 
-This is a **device simulator**, not part of the application. The future real
+This is a **device simulator**, not part of the application. The real
 `JetStreamCliAdapter` SSHes into it and drives the same CLI the `JetStreamCliRenderer`
 emits.
 

@@ -4,7 +4,7 @@ A throwaway container that behaves like an OpenWrt router/AP for the purposes of
 sdn-manager OpenWrt SSH adapter. It runs a real `sshd` whose shell has fake `uci` and
 `ubus` commands on `PATH`, backed by a persisted UCI state file.
 
-This is a **device simulator**, not part of the application. The future real
+This is a **device simulator**, not part of the application. The real
 `OpenWrtSshAdapter` SSHes into it and runs the same `uci`/`ubus` commands the
 `UciConfigRenderer` emits.
 

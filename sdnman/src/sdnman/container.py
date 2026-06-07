@@ -1,8 +1,8 @@
-"""Composition root: wires concrete infrastructure into application use cases.
+"""Composition root: wires concrete adapters into the application use cases.
 
 This is the only place where concrete classes are instantiated and bound to the
-abstract ports. The presentation layer asks the container for ready-to-use use
-cases, keeping framework code free of construction logic.
+abstract ports. The backend delivery layer asks the container for ready-to-use
+use cases, keeping framework code free of construction logic.
 """
 
 from __future__ import annotations

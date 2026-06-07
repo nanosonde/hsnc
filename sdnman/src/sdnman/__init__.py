@@ -1,10 +1,13 @@
-"""sdn-manager: self-hosted network controller UI.
+"""sdn-manager REST backend: device I/O, polling and persistence.
 
-Clean Architecture layout:
-    domain          -> enterprise entities, value objects, abstract interfaces (no deps)
-    application     -> use cases / DTOs (depends only on domain)
-    infrastructure  -> concrete adapters: YAML config, SQLite, device drivers
-    presentation    -> Flask web UI + CLI (composition happens here)
+The modules keep a clean dependency direction in a flat layout:
+    entities / value_objects / enums / interfaces -> core types and abstract ports
+    use_cases (+ dtos, services)                  -> application logic (depend on the core)
+    config / devices / persistence                -> concrete adapters (YAML, SQLite, SSH)
+    backend                                       -> Flask REST app, runtime and CLI
+
+The composition root in ``container.py`` wires the adapters to the ports. The web
+UI lives in the separate ``sdnweb`` package and talks to this backend over HTTP.
 """
 
 __version__ = "0.1.0"

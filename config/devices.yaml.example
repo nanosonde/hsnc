@@ -8,7 +8,7 @@
 #
 # This file describes only HOW to reach each device. The running/desired
 # configuration (VLANs, ports, SSIDs, model, firmware) is NOT stored here — the
-# Device Broker reads it from the hardware into `data/current_config.json`
+# REST backend reads it from the hardware into `data/current_config.json`
 # (the baseline) and the UI stages edits in `data/desired_config.json`.
 #
 # kind: gateway | switch | access_point
