@@ -64,11 +64,18 @@ in the backend, never in a web request** (see *Processes & storage*):
   OpenWrt UCI and JetStream CLI. SSH is never used for anything but configuration.
 - **Monitoring plane (pluggable).** A `MonitoringProvider`
   (`fetch_status` / `fetch_clients`) supplies runtime data. The provider is
-  selected per device by a `MonitoringProviderFactory`. The shipped providers are
-  an **SSH-scrape fallback** (OpenWrt `ubus`, JetStream CLI), a **mock** provider
-  (demo data), and a **null** provider. Richer sources (Prometheus node/OpenWrt
-  exporter, SNMPv3 for switches) are intended future providers that slot in behind
-  the same port without touching the config plane.
+  selected per device by a `MonitoringProviderFactory`, driven by the device's
+  `monitoring.source` (`primary` / `secondary` / `none`). The shipped providers
+  are an **SSH scrape** (OpenWrt `ubus`, JetStream CLI — the *primary* source), a
+  **Prometheus** exporter reader for OpenWrt and an **SNMPv3** reader for
+  JetStream switches (the *secondary* sources), plus a **mock** provider (demo
+  data) and a **null** provider. New sources slot in behind the same port without
+  touching the config plane.
+
+Selection is **strict**: a device set to `source: secondary` is never silently
+polled over SSH. If its secondary channel is down or misconfigured it reports
+`UNKNOWN` rather than masking the problem. See
+[docs/devices/](docs/devices/README.md) for per-platform setup.
 
 The **web frontend** never opens either plane directly: every read and write is an
 HTTP call to the backend, which serves runtime data from its latest monitoring
@@ -363,6 +370,30 @@ Per-device host, port and username come from the `connection` block in
       port: 22
       username: root
 ```
+
+#### Secondary monitoring (Prometheus / SNMPv3)
+
+Devices can be polled over a dedicated telemetry channel instead of SSH by
+setting `monitoring.source: secondary` in `config/devices.yaml` (OpenWrt →
+Prometheus exporter, JetStream → SNMPv3). Only the non-secret target lives in the
+inventory; credentials come from the environment. See
+[docs/devices/](docs/devices/README.md) for full setup.
+
+| Variable                              | Default     | Description                                              |
+| ------------------------------------- | ----------- | -------------------------------------------------------- |
+| `HSNC_PROMETHEUS_TOKEN`               | _(unset)_   | Bearer token sent to a device's Prometheus endpoint      |
+| `HSNC_DEVICE_<ID>_PROMETHEUS_TOKEN`   | _(unset)_   | Per-device Prometheus bearer token (overrides global)    |
+| `HSNC_PROMETHEUS_VERIFY_TLS`          | `1`         | `0` to skip TLS verification for HTTPS exporters          |
+| `HSNC_SNMP_USER`                      | _(unset)_   | SNMPv3 USM user name                                      |
+| `HSNC_SNMP_AUTH_KEY`                  | _(unset)_   | SNMPv3 authentication password                           |
+| `HSNC_SNMP_PRIV_KEY`                  | _(unset)_   | SNMPv3 privacy password                                  |
+| `HSNC_SNMP_AUTH_PROTO`                | `SHA`       | SNMPv3 auth protocol (`SHA` / `MD5`)                      |
+| `HSNC_SNMP_PRIV_PROTO`                | `AES`       | SNMPv3 privacy protocol (`AES` / `DES`)                  |
+| `HSNC_SNMP_LEVEL`                     | `authPriv`  | Security level (`authPriv` / `authNoPriv` / `noAuthNoPriv`) |
+| `HSNC_SNMP_PORT`                      | `161`       | Default SNMP UDP port                                     |
+| `HSNC_DEVICE_<ID>_SNMP_*`             | _(unset)_   | Per-device overrides for any of the SNMP settings above  |
+
+The SNMP backend needs the optional extra: `pip install '.[snmp]'`.
 
 ## Frontend (no build step)
 

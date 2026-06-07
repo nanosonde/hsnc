@@ -94,18 +94,40 @@ class DeviceConnection:
 
 
 @dataclass
-class MonitoringConfig:
-    """Optional secondary live-data source for a device.
+class SecondaryMonitoring:
+    """A device's secondary (non-SSH) runtime-telemetry channel.
 
-    The configuration plane is always SSH. This describes an *additional*
-    runtime/telemetry channel the poll loop may open alongside the SSH
-    connection (e.g. an SNMPv3 agent or a Prometheus exporter over HTTP(S)).
-    ``type == "ssh"`` means runtime data is scraped over the same SSH plane;
-    ``type == "none"`` disables live data for the device.
+    Describes *how* to reach an alternate monitoring source. Secrets (SNMPv3
+    auth/priv keys, a Prometheus bearer token) are never stored here — they come
+    from the environment, like SSH passwords. Only the non-secret target lives in
+    the inventory.
     """
 
-    type: str = "ssh"  # ssh | snmp | prometheus | none
-    endpoint: str = ""  # transport-specific target, e.g. "https://host:9100/metrics"
+    type: str = ""  # prometheus | snmp
+    endpoint: str = ""  # prometheus URL, or SNMP host[:port]
+    port: int = 0  # SNMP UDP port (0 -> default 161); ignored for prometheus
+
+
+@dataclass
+class MonitoringConfig:
+    """Per-device monitoring (runtime-polling) configuration.
+
+    The configuration plane is always SSH. This selects *which* channel the poll
+    loop uses to read live runtime data:
+
+    * ``source == "primary"`` (default) — scrape over the same SSH plane
+      (OpenWrt ``ubus`` / JetStream CLI).
+    * ``source == "secondary"`` — use the device's :attr:`secondary` channel
+      (Prometheus exporter for OpenWrt, SNMPv3 for switches).
+    * ``source == "none"`` — disable live polling for the device.
+
+    Selection is strict: when ``secondary`` is chosen there is no SSH fallback, so
+    a device with an unreachable secondary reports ``UNKNOWN`` rather than masking
+    the misconfiguration.
+    """
+
+    source: str = "primary"  # primary | secondary | none
+    secondary: SecondaryMonitoring | None = None
 
 
 @dataclass
@@ -129,7 +151,8 @@ class Device:
     ssids: list[str] = field(default_factory=list)
     # optional SSH connection override (host/port/user); None -> derive from ip
     connection: DeviceConnection | None = None
-    # optional secondary live-data source (SNMP/Prometheus); None -> SSH scrape
+    # optional monitoring/runtime-polling config (primary SSH vs secondary); None
+    # -> primary SSH scrape
     monitoring: MonitoringConfig | None = None
 
 

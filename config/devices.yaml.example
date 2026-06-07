@@ -13,7 +13,18 @@
 #
 # kind: gateway | switch | access_point
 # connection: SSH details (passwords come from the environment, never this file)
-# monitoring: live-data channel — type: ssh | snmp | prometheus | none
+# monitoring:  live runtime-polling channel. Configuration is always over SSH;
+#   this only selects where live status/clients are read from:
+#     source: primary | secondary | none   (default: primary)
+#       primary   -> scrape over SSH (OpenWrt ubus / JetStream CLI)
+#       secondary -> use the per-device `secondary` channel below
+#       none      -> disable live polling (device shows "unknown")
+#     secondary:                            (only used when source: secondary)
+#       type: prometheus | snmp
+#       endpoint: prometheus URL, or SNMP host[:port]
+#       port: SNMP UDP port (default 161; ignored for prometheus)
+#   Secrets (SNMPv3 keys, Prometheus token) are NEVER stored here — they come
+#   from the environment. See docs/devices/ for per-platform setup.
 devices:
   - id: gateway-1
     name: ER605
@@ -24,7 +35,7 @@ devices:
       username: root
       port: 22
     monitoring:
-      type: ssh
+      source: primary
 
   - id: switch-1
     name: TL-SG2210P
@@ -35,7 +46,13 @@ devices:
       username: admin
       port: 22
     monitoring:
-      type: ssh
+      source: primary
+    # Secondary polling over SNMPv3 (see docs/devices/jetstream.md):
+    #   source: secondary
+    #   secondary:
+    #     type: snmp
+    #     endpoint: 192.168.50.2
+    #     port: 161
 
   - id: ap-1
     name: EAP245
@@ -46,7 +63,12 @@ devices:
       username: root
       port: 22
     monitoring:
-      type: ssh
+      source: primary
+    # Secondary polling over a Prometheus exporter (see docs/devices/openwrt.md):
+    #   source: secondary
+    #   secondary:
+    #     type: prometheus
+    #     endpoint: http://192.168.50.3:9100/metrics
 
   - id: switch-2
     name: GS1900-OWRT
@@ -57,4 +79,4 @@ devices:
       username: root
       port: 22
     monitoring:
-      type: ssh
+      source: primary

@@ -7,7 +7,7 @@ repository; the domain itself never imports Pydantic.
 
 from __future__ import annotations
 
-from pydantic import BaseModel, Field
+from pydantic import BaseModel, Field, model_validator
 
 
 class SiteSchema(BaseModel):
@@ -45,9 +45,48 @@ class ConnectionSchema(BaseModel):
     username: str = ""
 
 
-class MonitoringSchema(BaseModel):
-    type: str = "ssh"  # ssh | snmp | prometheus | none
+class SecondaryMonitoringSchema(BaseModel):
+    type: str = ""  # prometheus | snmp
     endpoint: str = ""
+    port: int = Field(default=0, ge=0, le=65535)
+
+
+class MonitoringSchema(BaseModel):
+    """Per-device monitoring config.
+
+    Canonical form::
+
+        monitoring:
+          source: primary | secondary | none
+          secondary:
+            type: prometheus | snmp
+            endpoint: "http://host:9100/metrics"   # or snmp host[:port]
+            port: 161
+
+    The legacy flat form (``monitoring: {type: ssh|none|prometheus|snmp}``) is
+    still accepted and normalised into the canonical form for backward
+    compatibility.
+    """
+
+    source: str = "primary"  # primary | secondary | none
+    secondary: SecondaryMonitoringSchema | None = None
+
+    @model_validator(mode="before")
+    @classmethod
+    def _accept_legacy(cls, data: object) -> object:
+        if not isinstance(data, dict):
+            return data
+        # New form already (or empty) — keep only canonical keys.
+        if "source" in data or "secondary" in data or "type" not in data:
+            return {k: v for k, v in data.items() if k in ("source", "secondary")}
+        # Legacy flat form: {type: ssh|none|prometheus|snmp, endpoint: ...}.
+        legacy = str(data.get("type") or "").lower()
+        endpoint = data.get("endpoint", "")
+        if legacy in ("prometheus", "snmp"):
+            return {"source": "secondary", "secondary": {"type": legacy, "endpoint": endpoint}}
+        if legacy == "none":
+            return {"source": "none"}
+        return {"source": "primary"}
 
 
 class DeviceSchema(BaseModel):

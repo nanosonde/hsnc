@@ -64,7 +64,21 @@ def test_yaml_config_repository_reads(config_dir):
     assert device.connection is not None
     assert device.connection.username == "admin"
     assert device.monitoring is not None
-    assert device.monitoring.type == "ssh"
+    assert device.monitoring.source == "primary"
+
+
+def test_monitoring_schema_accepts_legacy_secondary_form():
+    from hsnc.config.schemas import MonitoringSchema
+
+    schema = MonitoringSchema.model_validate({"type": "prometheus", "endpoint": "http://x/m"})
+    assert schema.source == "secondary"
+    assert schema.secondary is not None
+    assert schema.secondary.type == "prometheus"
+    assert schema.secondary.endpoint == "http://x/m"
+
+    assert MonitoringSchema.model_validate({"type": "none"}).source == "none"
+    assert MonitoringSchema.model_validate({"type": "ssh"}).source == "primary"
+
 
 
 def test_yaml_config_archive_roundtrip(config_dir):

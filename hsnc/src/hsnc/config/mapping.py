@@ -20,6 +20,7 @@ from ..entities import (
     Device,
     DeviceConnection,
     MonitoringConfig,
+    SecondaryMonitoring,
     SwitchPort,
     Vlan,
 )
@@ -31,6 +32,7 @@ from .schemas import (
     DeviceSchema,
     MonitoringSchema,
     PortSchema,
+    SecondaryMonitoringSchema,
     VlanSchema,
 )
 
@@ -48,7 +50,18 @@ def profile_to_device(schema: DeviceSchema) -> Device:
         else None
     )
     monitoring = (
-        MonitoringConfig(type=schema.monitoring.type, endpoint=schema.monitoring.endpoint)
+        MonitoringConfig(
+            source=schema.monitoring.source or "primary",
+            secondary=(
+                SecondaryMonitoring(
+                    type=schema.monitoring.secondary.type,
+                    endpoint=schema.monitoring.secondary.endpoint,
+                    port=schema.monitoring.secondary.port,
+                )
+                if schema.monitoring.secondary is not None
+                else None
+            ),
+        )
         if schema.monitoring is not None
         else None
     )
@@ -83,7 +96,18 @@ def device_to_profile(device: Device) -> DeviceSchema:
             else None
         ),
         monitoring=(
-            MonitoringSchema(type=device.monitoring.type, endpoint=device.monitoring.endpoint)
+            MonitoringSchema(
+                source=device.monitoring.source,
+                secondary=(
+                    SecondaryMonitoringSchema(
+                        type=device.monitoring.secondary.type,
+                        endpoint=device.monitoring.secondary.endpoint,
+                        port=device.monitoring.secondary.port,
+                    )
+                    if device.monitoring.secondary is not None
+                    else None
+                ),
+            )
             if device.monitoring is not None
             else None
         ),
