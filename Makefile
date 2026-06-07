@@ -9,7 +9,7 @@
 PYTHON ?= $(shell if [ -x .venv/bin/python ]; then echo .venv/bin/python; else echo python3; fi)
 PYBIN  := $(dir $(abspath $(PYTHON)))
 
-SRC_DIRS      := src tests
+PACKAGES      := sdnman sdnweb
 SMOKE_TEST    := fakes/smoke_test.sh
 FAKES_COMPOSE := fakes/docker-compose.yml
 COMPOSE       := docker-compose.yml
@@ -27,13 +27,13 @@ help: ## Show this help.
 		| awk 'BEGIN {FS = ":.*?## "}; {printf "  \033[36m%-12s\033[0m %s\n", $$1, $$2}'
 
 check: ## Compile-check all sources for syntax errors (fast).
-	$(PYTHON) -m compileall -q $(SRC_DIRS)
+	for pkg in $(PACKAGES); do $(PYTHON) -m compileall -q $$pkg/src $$pkg/tests || exit 1; done
 
-lint: ## Lint sources with ruff.
-	$(PYTHON) -m ruff check $(SRC_DIRS)
+lint: ## Lint both packages with ruff.
+	for pkg in $(PACKAGES); do (cd $$pkg && $(abspath $(PYTHON)) -m ruff check src tests) || exit 1; done
 
-unit: ## Run the unit test suite (pytest).
-	$(PYTHON) -m pytest
+unit: ## Run the unit test suite (pytest) for both packages.
+	for pkg in $(PACKAGES); do (cd $$pkg && $(abspath $(PYTHON)) -m pytest) || exit 1; done
 
 integration: ## Run integration tests against the fake SSH devices (needs docker + paramiko).
 	PATH="$(PYBIN):$$PATH" bash $(SMOKE_TEST)
@@ -67,4 +67,4 @@ all: check lint test ## Run checking, linting and all tests in order (starts not
 clean: ## Remove Python caches, build and coverage artifacts.
 	find . -type d -name '__pycache__' -prune -exec rm -rf {} +
 	rm -rf .pytest_cache .ruff_cache .coverage coverage.xml htmlcov \
-		build dist src/*.egg-info
+		build dist */build */dist */src/*.egg-info

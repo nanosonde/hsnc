@@ -22,7 +22,7 @@ from sdnman.infrastructure.config.yaml_config_repository import (
     YamlConfigRepository,
 )
 
-_PROJECT_CONFIG = Path(__file__).resolve().parents[1] / "config"
+_PROJECT_CONFIG = Path(__file__).resolve().parents[2] / "config"
 
 
 @pytest.fixture

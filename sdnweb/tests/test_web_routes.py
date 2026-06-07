@@ -13,9 +13,9 @@ import os
 from pathlib import Path
 
 import pytest
-
 from sdnman.infrastructure.container import Settings
-from sdnman.presentation.app import create_app
+
+from sdnweb.app import create_app
 
 from .harness import backend_api_client
 

@@ -1,4 +1,4 @@
-"""WSGI entry point for gunicorn: ``sdnman.presentation.wsgi:app``."""
+"""WSGI entry point for gunicorn: ``sdnweb.wsgi:app``."""
 
 from __future__ import annotations
 

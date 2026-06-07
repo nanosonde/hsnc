@@ -1,0 +1,10 @@
+# Fixed test users. Passwords: admin/admin and viewer/viewer.
+users:
+- username: admin
+  password_hash: scrypt:32768:8:1$Usj6i9xnzYR8Guo9$e4f352786284ac76ff24e274a262124682cde725943ce2b65dc77c095616cf93d484895257c9fa39ffadedca41fea5e34cd6ed54a5333fde4c8ad731439bae64
+  role: admin
+  display_name: Administrator
+- username: viewer
+  password_hash: scrypt:32768:8:1$R2TdjcnxB3b1XJbR$c5c7d400c71261436c4286afe2cbd919eec39005ad8eeed366d03f31daebe3582d903518d9edc1c548f93920d4718c0fbfa20db958b21a02832bfbfa555b1509
+  role: viewer
+  display_name: Read Only

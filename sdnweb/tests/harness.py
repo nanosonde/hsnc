@@ -11,7 +11,8 @@ from typing import Any
 
 from sdnman.backend.app import create_api_app
 from sdnman.infrastructure.container import Container, Settings
-from sdnman.presentation.api_client import ApiClient
+
+from sdnweb.api_client import ApiClient
 
 
 class FlaskTestTransport:

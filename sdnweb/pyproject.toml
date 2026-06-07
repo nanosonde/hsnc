@@ -1,0 +1,58 @@
+[build-system]
+requires = ["setuptools>=68"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "sdnweb"
+version = "0.1.0"
+description = "Standalone Flask web frontend for sdn-manager. A pure presentation tier that talks to the sdnman REST backend over HTTP."
+readme = "README.md"
+requires-python = ">=3.11"
+license = { text = "AGPL-3.0-or-later" }
+authors = [{ name = "sdn-manager contributors" }]
+classifiers = [
+    "License :: OSI Approved :: GNU Affero General Public License v3 or later (AGPLv3+)",
+]
+dependencies = [
+    "Flask>=3.0",
+    "Jinja2>=3.1",
+    "Werkzeug>=3.0",
+    "click>=8.1",
+    "gunicorn>=21.2",
+]
+
+[project.optional-dependencies]
+# The web test harness boots a real backend in-process, so the test environment
+# also needs the sdnman package installed (editable) alongside these tools.
+dev = [
+    "pytest>=8.0",
+    "pytest-cov>=4.1",
+    "ruff>=0.4",
+]
+
+[project.scripts]
+sdnweb = "sdnweb.cli:main"
+
+[tool.setuptools.packages.find]
+where = ["src"]
+
+[tool.setuptools.package-data]
+"sdnweb" = [
+    "templates/*.html",
+    "templates/**/*.html",
+    "static/css/*.css",
+    "static/js/*.js",
+]
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]
+pythonpath = ["src"]
+addopts = "-q"
+
+[tool.ruff]
+line-length = 100
+target-version = "py311"
+src = ["src", "tests"]
+
+[tool.ruff.lint]
+select = ["E", "F", "I", "UP", "B"]
