@@ -1,6 +1,0 @@
-#!/command/with-contenv sh
-# Device Broker: owns ALL device connections (the connection plane). Keeps a
-# persistent SSH connection warm to every device, serves the Unix-socket IPC API
-# the web app uses, and polls the monitoring plane into runtime.db (sole writer).
-exec /command/s6-setuidgid appuser \
-  sdnman-ctl broker

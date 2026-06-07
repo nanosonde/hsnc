@@ -1,0 +1,15 @@
+#!/command/with-contenv sh
+# REST backend: owns ALL device I/O (the connection plane). Keeps persistent SSH
+# connections warm, reads each device's baseline on boot, polls the monitoring
+# plane into runtime.db (sole writer), and serves the /api HTTP surface that the
+# web frontend consumes. Bound to loopback only - it is never exposed.
+# HOME points at the runtime user's home so gunicorn's control server can write
+# its state there instead of failing on the root-owned /root.
+export HOME=/home/appuser
+exec /command/s6-setuidgid appuser \
+  gunicorn \
+    --bind 127.0.0.1:8081 \
+    --workers 1 \
+    --threads 8 \
+    --timeout 120 \
+    sdnman.backend.wsgi:app

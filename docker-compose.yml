@@ -14,7 +14,7 @@ services:
       SDNMAN_USE_MOCK_DEVICES: "0"
       SDNMAN_POLL_INTERVAL: "30"
       SDNMAN_RETENTION_DAYS: "30"
-      # On startup the Device Broker reads each device's live config as the
+      # On startup the REST backend reads each device's live config as the
       # history baseline. Set to "0" if the controller is the sole source of
       # truth and devices are never changed out-of-band.
       SDNMAN_BASELINE_ON_START: "1"

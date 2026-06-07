@@ -26,10 +26,12 @@ ENV PYTHONUNBUFFERED=1 \
     SDNMAN_RETENTION_DAYS=30 \
     SDNMAN_BASELINE_ON_START=1 \
     SDNMAN_BROKER_SOCKET=/data/broker.sock \
+    SDNMAN_API_BASE_URL=http://127.0.0.1:8081 \
     S6_BEHAVIOUR_IF_STAGE2_FAILS=2
 
-# s6-overlay supervises the long-running processes (web + broker) in a single
-# container. Pinned; x86_64 only (adjust the arch tarball for other platforms).
+# s6-overlay supervises the long-running processes (web frontend + REST backend)
+# in a single container. Pinned; x86_64 only (adjust the arch tarball for other
+# platforms).
 ARG S6_OVERLAY_VERSION=3.2.0.2
 ADD https://github.com/just-containers/s6-overlay/releases/download/v${S6_OVERLAY_VERSION}/s6-overlay-noarch.tar.xz /tmp/s6-overlay-noarch.tar.xz
 ADD https://github.com/just-containers/s6-overlay/releases/download/v${S6_OVERLAY_VERSION}/s6-overlay-x86_64.tar.xz /tmp/s6-overlay-x86_64.tar.xz
@@ -54,13 +56,13 @@ RUN python -m pip install --no-cache-dir "$(ls /tmp/*.whl)[ssh]" && rm -f /tmp/*
 
 # Seed configuration baked into the image; copied into the volume on first run.
 COPY config /app/seed-config
-# s6-overlay service definitions (seed-config oneshot -> web + broker longruns,
-# baseline oneshot after the broker is up).
+# s6-overlay service definitions (seed-config oneshot -> api + web longruns;
+# the api backend reads the baseline and polls internally, no separate oneshot).
 COPY docker/s6-overlay/s6-rc.d /etc/s6-overlay/s6-rc.d
 COPY docker/s6-overlay/scripts/seed-config.sh /usr/local/bin/seed-config.sh
 RUN chmod +x /usr/local/bin/seed-config.sh \
     /etc/s6-overlay/s6-rc.d/web/run \
-    /etc/s6-overlay/s6-rc.d/broker/run \
+    /etc/s6-overlay/s6-rc.d/api/run \
     && mkdir -p /data && chown -R appuser:appuser /data /app
 
 VOLUME ["/data"]

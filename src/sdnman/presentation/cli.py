@@ -35,6 +35,30 @@ def serve(host: str, port: int, debug: bool) -> None:
 
 
 @main.command()
+@click.option("--host", default="127.0.0.1", show_default=True)
+@click.option("--port", default=8081, show_default=True, type=int)
+def api(host: str, port: int) -> None:
+    """Run the REST backend dev server (use gunicorn in production).
+
+    Owns all device I/O: starts the connection pool, reads the baseline on boot
+    (when enabled) and runs the poll loop, then serves the /api surface.
+    """
+
+    logging.basicConfig(level=logging.INFO, format="%(asctime)s %(levelname)s %(message)s")
+    from ..backend.app import create_api_app
+    from ..backend.runtime import BackendRuntime
+
+    app = create_api_app()
+    runtime = BackendRuntime(app.config["CONTAINER"])
+    app.config["POOL"] = runtime.pool
+    runtime.start()
+    try:
+        app.run(host=host, port=port)
+    finally:
+        runtime.stop()
+
+
+@main.command()
 def poll() -> None:
     """Run a single device poll sweep and exit (one-shot, broker profile)."""
 
