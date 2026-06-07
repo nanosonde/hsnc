@@ -56,6 +56,10 @@ from .security import verify_password
 #: used by the always-on Device Broker process.
 PROFILE_WEB = "web"
 PROFILE_BROKER = "broker"
+#: The unified REST backend: real device adapters for configuration I/O, a live
+#: poll loop that scrapes into the runtime store, and read endpoints that serve
+#: the latest snapshot (no per-request device I/O).
+PROFILE_API = "api"
 
 
 @dataclass
@@ -133,7 +137,7 @@ class Container:
         # connection-plane + monitoring-plane wiring differs per profile.
         self.runner_registry: PersistentRunnerRegistry | None = None
         self.ssh_resolver: SshConnectionResolver | None = None
-        if profile == PROFILE_BROKER:
+        if profile in (PROFILE_BROKER, PROFILE_API):
             self.ssh_resolver = SshConnectionResolver(settings.ssh)
             self.runner_registry = PersistentRunnerRegistry()
             self.adapters = DefaultDeviceAdapterFactory(
@@ -141,20 +145,28 @@ class Container:
                 resolver=self.ssh_resolver,
                 runner_factory=self.runner_registry.get,
             )
-            self.monitoring = DefaultMonitoringProviderFactory(
+            live_monitoring = DefaultMonitoringProviderFactory(
                 use_mock=settings.use_mock_devices,
                 resolver=self.ssh_resolver,
                 runner_factory=self.runner_registry.get,
             )
-        else:
+            poll_monitoring = live_monitoring
+            if profile == PROFILE_API:
+                # Read endpoints serve the latest runtime snapshot; the poll
+                # loop keeps it fresh by scraping live monitoring.
+                self.monitoring = RuntimeStoreMonitoringFactory(self.runtime)
+            else:  # PROFILE_BROKER scrapes live on demand (it serves no reads)
+                self.monitoring = live_monitoring
+        else:  # PROFILE_WEB proxies device I/O to the broker; reads the snapshot
             self.adapters = BrokerProxyAdapterFactory(BrokerClient(settings.broker_socket))
             self.monitoring = RuntimeStoreMonitoringFactory(self.runtime)
+            poll_monitoring = self.monitoring
 
-        # application services. The broker scrapes fresh every cycle (records the
-        # time-series); the web reads the latest snapshot from the runtime store,
-        # which is local SQLite and needs no separate cache.
+        # application services. The poll loop records live state; read use cases
+        # read the latest snapshot (local SQLite, no separate cache needed).
         self.network = NetworkStateService(self.config, self.monitoring)
         self.network_cached = self.network
+        self.poll_network = NetworkStateService(self.config, poll_monitoring)
 
         # use cases
         self.authenticate_user = AuthenticateUser(self.config, verify_password)
@@ -166,7 +178,7 @@ class Container:
         self.list_clients = ListClients(self.network_cached)
         self.get_topology = GetTopology(self.network_cached, self.topology_provider)
         self.poll_device_state = PollDeviceState(
-            self.network, self.runtime, retention_days=settings.retention_days
+            self.poll_network, self.runtime, retention_days=settings.retention_days
         )
         self.read_baseline = ReadBaseline(
             self.config, self.adapters, self.applied_config, self.history
