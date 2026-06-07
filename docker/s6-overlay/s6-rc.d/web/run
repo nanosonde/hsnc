@@ -9,4 +9,4 @@ exec /command/s6-setuidgid appuser \
     --workers 1 \
     --threads 4 \
     --timeout 60 \
-    sdnman.presentation.wsgi:app
+    sdnweb.wsgi:app

@@ -6,12 +6,15 @@ FROM python:3.12-slim AS build
 WORKDIR /app
 ENV PIP_NO_CACHE_DIR=1 PIP_DISABLE_PIP_VERSION_CHECK=1
 
-COPY pyproject.toml README.md ./
-COPY src ./src
+COPY README.md ./
+COPY sdnman ./sdnman
+COPY sdnweb ./sdnweb
 
-# Build a wheel so the runtime image stays lean.
+# Build a wheel per package so the runtime image stays lean and the two code bases
+# stay independent.
 RUN python -m pip install --upgrade pip build \
-    && python -m build --wheel --outdir /dist
+    && python -m build --wheel --outdir /dist ./sdnman \
+    && python -m build --wheel --outdir /dist ./sdnweb
 
 
 # ---------- runtime stage ----------
@@ -49,9 +52,10 @@ RUN useradd --create-home --uid 10001 appuser
 WORKDIR /app
 
 COPY --from=build /dist/*.whl /tmp/
-# Install the wheel with the [ssh] extra so real-device mode (paramiko) works
-# out of the box; gunicorn is already a base dependency.
-RUN python -m pip install --no-cache-dir "$(ls /tmp/*.whl)[ssh]" && rm -f /tmp/*.whl
+# Install both wheels. The backend gets the [ssh] extra so real-device mode
+# (paramiko) works out of the box; gunicorn is a dependency of both.
+RUN python -m pip install --no-cache-dir "$(ls /tmp/sdn_manager-*.whl)[ssh]" $(ls /tmp/sdnweb-*.whl) \
+    && rm -f /tmp/*.whl
 
 # Seed configuration baked into the image; copied into the volume on first run.
 COPY config /app/seed-config
