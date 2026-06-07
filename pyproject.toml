@@ -34,7 +34,8 @@ ssh = [
 ]
 
 [project.scripts]
-sdnman-ctl = "sdnman.presentation.cli:main"
+sdnman-ctl = "sdnman.backend.cli:main"
+sdnweb = "sdnman.presentation.cli:main"
 
 [tool.setuptools.packages.find]
 where = ["src"]

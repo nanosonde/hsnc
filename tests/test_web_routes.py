@@ -45,7 +45,7 @@ def app(tmp_path):
         baseline_on_start=False,
     )
     api_client, container = backend_api_client(settings)
-    flask_app = create_app(settings, api_client=api_client)
+    flask_app = create_app(api_client=api_client)
     flask_app.config["READ_ONLY"] = True
     flask_app.config["TESTING"] = True
     try:

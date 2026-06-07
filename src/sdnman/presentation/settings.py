@@ -1,37 +1,29 @@
-"""Settings resolution from environment variables with sensible defaults."""
+"""Web frontend settings: how to reach the backend, resolved from the environment.
+
+The frontend holds no device or persistence configuration — it only needs to know
+where the REST backend lives and how to authenticate to it, plus its own Flask
+secret key. This type is self-contained and shares nothing with the backend.
+"""
 
 from __future__ import annotations
 
 import os
-from pathlib import Path
-
-from ..infrastructure.container import Settings
-from ..infrastructure.devices.ssh_transport import SshConnectionSettings
+from dataclasses import dataclass
 
 
-def settings_from_env() -> Settings:
-    base = Path(__file__).resolve().parents[3]
-    config_dir = Path(os.environ.get("SDNMAN_CONFIG_DIR", base / "config"))
-    data_dir = Path(os.environ.get("SDNMAN_DATA_DIR", base / "data"))
-    use_mock = os.environ.get("SDNMAN_USE_MOCK_DEVICES", "1") not in ("0", "false", "False")
-    poll_interval = int(os.environ.get("SDNMAN_POLL_INTERVAL", "30"))
-    retention_days = int(os.environ.get("SDNMAN_RETENTION_DAYS", "30"))
-    baseline_on_start = os.environ.get("SDNMAN_BASELINE_ON_START", "1") not in (
-        "0",
-        "false",
-        "False",
-    )
-    api_base_url = os.environ.get("SDNMAN_API_BASE_URL", "http://127.0.0.1:8081")
-    api_token = os.environ.get("SDNMAN_API_TOKEN", "")
-    return Settings(
-        config_dir=config_dir,
-        data_dir=data_dir,
-        use_mock_devices=use_mock,
-        poll_interval_seconds=poll_interval,
-        retention_days=retention_days,
-        baseline_on_start=baseline_on_start,
-        api_base_url=api_base_url,
-        api_token=api_token,
-        ssh=SshConnectionSettings.from_env(),
+@dataclass(frozen=True)
+class WebSettings:
+    """Runtime configuration for the web frontend."""
+
+    api_base_url: str = "http://127.0.0.1:8081"
+    api_token: str = ""
+    secret_key: str = "dev-insecure-change-me"
+
+
+def settings_from_env() -> WebSettings:
+    return WebSettings(
+        api_base_url=os.environ.get("SDNMAN_API_BASE_URL", "http://127.0.0.1:8081"),
+        api_token=os.environ.get("SDNMAN_API_TOKEN", ""),
+        secret_key=os.environ.get("SDNMAN_SECRET_KEY", "dev-insecure-change-me"),
     )
 

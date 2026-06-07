@@ -19,8 +19,8 @@ from werkzeug.exceptions import HTTPException
 
 from ..application.wire import error_envelope, status_for_exception
 from ..infrastructure.container import Container, Settings
-from ..presentation.settings import settings_from_env
 from .api import bp as api_bp
+from .settings import settings_from_env
 
 
 def create_api_app(settings: Settings | None = None, container: Container | None = None) -> Flask:

@@ -8,12 +8,10 @@ device I/O, polling and persistence.
 
 from __future__ import annotations
 
-import os
 from pathlib import Path
 
 from flask import Flask, flash, redirect, render_template, request, url_for
 
-from ..infrastructure.container import Settings
 from .api_client import ApiClient
 from .auth import register_template_globals
 from .blueprints import (
@@ -25,13 +23,13 @@ from .blueprints import (
     devices_bp,
     topology_bp,
 )
-from .settings import settings_from_env
+from .settings import WebSettings, settings_from_env
 
 _TEMPLATES = Path(__file__).resolve().parent / "templates"
 _STATIC = Path(__file__).resolve().parent / "static"
 
 
-def create_app(settings: Settings | None = None, api_client: ApiClient | None = None) -> Flask:
+def create_app(settings: WebSettings | None = None, api_client: ApiClient | None = None) -> Flask:
     settings = settings or settings_from_env()
 
     app = Flask(
@@ -39,7 +37,7 @@ def create_app(settings: Settings | None = None, api_client: ApiClient | None = 
         template_folder=str(_TEMPLATES),
         static_folder=str(_STATIC),
     )
-    app.config["SECRET_KEY"] = os.environ.get("SDNMAN_SECRET_KEY", "dev-insecure-change-me")
+    app.config["SECRET_KEY"] = settings.secret_key
     app.config["API"] = api_client or ApiClient(settings.api_base_url, settings.api_token)
     app.config["SETTINGS"] = settings
     app.config["READ_ONLY"] = True
