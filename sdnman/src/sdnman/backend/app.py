@@ -17,8 +17,8 @@ import os
 from flask import Flask, jsonify, request
 from werkzeug.exceptions import HTTPException
 
-from ..application.wire import error_envelope, status_for_exception
-from ..infrastructure.container import Container, Settings
+from ..container import Container, Settings
+from ..wire import error_envelope, status_for_exception
 from .api import bp as api_bp
 from .settings import settings_from_env
 

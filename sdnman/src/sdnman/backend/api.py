@@ -11,7 +11,7 @@ from __future__ import annotations
 
 from flask import Blueprint, Response, abort, current_app, jsonify, request
 
-from ..application.wire import to_jsonable
+from ..wire import to_jsonable
 
 bp = Blueprint("api", __name__, url_prefix="/api")
 

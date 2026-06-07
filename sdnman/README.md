@@ -8,10 +8,17 @@ This package shares no source code with `sdnweb`.
 
 ## Layout
 
-- `src/sdnman/domain` — entities, value objects, enums, ports.
-- `src/sdnman/application` — use cases, DTOs, the JSON wire contract.
-- `src/sdnman/infrastructure` — config repositories, device adapters, persistence,
-  the composition container.
+The package is flat: domain, application and infrastructure modules live directly
+under `src/sdnman/`, with cohesive subpackages for the larger functional groups.
+
+- **Core modules** (top level) — `entities.py`, `value_objects.py`, `enums.py`,
+  `interfaces.py` (ports); `dtos.py`, `services.py`, `formatters.py`, `wire.py`
+  (the JSON wire contract); `security.py`; and `container.py`, the composition root
+  that wires concrete implementations to the abstract ports.
+- `src/sdnman/use_cases` — the application use cases.
+- `src/sdnman/config` — YAML/JSON config repositories and stores.
+- `src/sdnman/devices` — device adapters, monitoring providers, SSH transport.
+- `src/sdnman/persistence` — SQLite runtime store and JSONL apply history.
 - `src/sdnman/backend` — the Flask REST app, background runtime and CLI.
 
 ## Console script

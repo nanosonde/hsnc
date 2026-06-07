@@ -4,16 +4,16 @@ from __future__ import annotations
 
 import json
 
-from sdnman.domain.entities import Device
-from sdnman.domain.enums import ConnectionType, DeviceKind, DeviceStatus, PortMode
-from sdnman.domain.value_objects import IpAddress, MacAddress
-from sdnman.infrastructure.devices.monitoring import OpenWrtSshMonitoringProvider
-from sdnman.infrastructure.devices.openwrt_ssh_adapter import OpenWrtSshAdapter
-from sdnman.infrastructure.devices.ssh_transport import (
+from sdnman.devices.monitoring import OpenWrtSshMonitoringProvider
+from sdnman.devices.openwrt_ssh_adapter import OpenWrtSshAdapter
+from sdnman.devices.ssh_transport import (
     FakeSshRunner,
     SshConnectionResolver,
     SshConnectionSettings,
 )
+from sdnman.entities import Device
+from sdnman.enums import ConnectionType, DeviceKind, DeviceStatus, PortMode
+from sdnman.value_objects import IpAddress, MacAddress
 
 _BOARD = json.dumps(
     {
@@ -147,7 +147,7 @@ def test_fetch_config_is_authoritative_and_clears_stale_entries() -> None:
     # The device reports no bridge-vlans, no wireless and no ports, but the
     # inventory still carries stale values. A re-read is the single source of
     # truth, so the returned device must come back empty, not keep the old data.
-    from sdnman.domain.entities import SwitchPort, Vlan
+    from sdnman.entities import SwitchPort, Vlan
 
     runner = FakeSshRunner({"uci show system": _UCI_SYSTEM})  # network/wireless empty
     device = _device()

@@ -6,23 +6,23 @@ from datetime import UTC
 
 import pytest
 
-from sdnman.application.use_cases.backup import ExportBackup, ImportBackup
-from sdnman.domain.entities import (
+from sdnman.config.yaml_config_repository import (
+    YamlConfigRepository,
+)
+from sdnman.devices.factory import DefaultDeviceAdapterFactory
+from sdnman.devices.jetstream_cli_adapter import JetStreamCliAdapter
+from sdnman.devices.openwrt_ssh_adapter import OpenWrtSshAdapter
+from sdnman.entities import (
     AssociationFailure,
     Client,
     Device,
 )
-from sdnman.domain.enums import ConnectionType, DeviceKind, DeviceStatus
-from sdnman.domain.value_objects import IpAddress, MacAddress
-from sdnman.infrastructure.config.yaml_config_repository import (
-    YamlConfigRepository,
-)
-from sdnman.infrastructure.devices.factory import DefaultDeviceAdapterFactory
-from sdnman.infrastructure.devices.jetstream_cli_adapter import JetStreamCliAdapter
-from sdnman.infrastructure.devices.openwrt_ssh_adapter import OpenWrtSshAdapter
-from sdnman.infrastructure.persistence.sqlite_runtime_store import (
+from sdnman.enums import ConnectionType, DeviceKind, DeviceStatus
+from sdnman.persistence.sqlite_runtime_store import (
     SqliteRuntimeStore,
 )
+from sdnman.use_cases.backup import ExportBackup, ImportBackup
+from sdnman.value_objects import IpAddress, MacAddress
 
 SITE_YAML = "id: default\nname: My Site\ncountry: DE\n"
 USERS_YAML = (
@@ -118,8 +118,8 @@ def test_sqlite_import_rows_replaces(tmp_path):
 def test_jsonl_apply_history_store_roundtrips(tmp_path):
     from datetime import datetime
 
-    from sdnman.domain.entities import ApplyEvent, ApplyOutcome
-    from sdnman.infrastructure.persistence.jsonl_apply_history_store import (
+    from sdnman.entities import ApplyEvent, ApplyOutcome
+    from sdnman.persistence.jsonl_apply_history_store import (
         JsonlApplyHistoryStore,
     )
 
@@ -188,8 +188,8 @@ def test_sqlite_prune_removes_old_rows(tmp_path):
 def test_backup_roundtrip(config_dir, tmp_path):
     from datetime import datetime
 
-    from sdnman.domain.entities import ApplyEvent, ApplyOutcome
-    from sdnman.infrastructure.persistence.jsonl_apply_history_store import (
+    from sdnman.entities import ApplyEvent, ApplyOutcome
+    from sdnman.persistence.jsonl_apply_history_store import (
         JsonlApplyHistoryStore,
     )
 
@@ -237,7 +237,7 @@ def test_real_adapter_factory_routes_by_kind():
 
 
 def test_mock_monitoring_factory_returns_data():
-    from sdnman.infrastructure.devices.monitoring import (
+    from sdnman.devices.monitoring import (
         DefaultMonitoringProviderFactory,
     )
 

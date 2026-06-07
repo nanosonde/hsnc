@@ -4,7 +4,7 @@ from __future__ import annotations
 
 import pytest
 
-from sdnman.domain.value_objects import (
+from sdnman.value_objects import (
     DataVolume,
     IpAddress,
     MacAddress,

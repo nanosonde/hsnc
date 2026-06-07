@@ -5,7 +5,7 @@ from __future__ import annotations
 from collections.abc import Iterable
 from datetime import datetime
 
-from sdnman.domain.entities import (
+from sdnman.entities import (
     ApplyEvent,
     AssociationFailure,
     Client,
@@ -16,7 +16,7 @@ from sdnman.domain.entities import (
     TopologyNode,
     User,
 )
-from sdnman.domain.interfaces import (
+from sdnman.interfaces import (
     AppliedConfigStore,
     ApplyHistoryStore,
     ConfigRepository,

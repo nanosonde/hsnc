@@ -5,8 +5,8 @@ from __future__ import annotations
 import os
 from pathlib import Path
 
-from ..infrastructure.container import Settings
-from ..infrastructure.devices.ssh_transport import SshConnectionSettings
+from ..container import Settings
+from ..devices.ssh_transport import SshConnectionSettings
 
 
 def settings_from_env() -> Settings:

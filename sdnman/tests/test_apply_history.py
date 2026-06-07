@@ -4,8 +4,8 @@ from __future__ import annotations
 
 from datetime import UTC, datetime
 
-from sdnman.application.use_cases.apply_history import ListApplyHistory
-from sdnman.domain.entities import ApplyEvent, ApplyOutcome
+from sdnman.entities import ApplyEvent, ApplyOutcome
+from sdnman.use_cases.apply_history import ListApplyHistory
 
 from .fakes import FakeApplyHistoryStore
 

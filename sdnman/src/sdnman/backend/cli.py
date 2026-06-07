@@ -8,7 +8,7 @@ from pathlib import Path
 
 import click
 
-from ..infrastructure.container import Container
+from ..container import Container
 from .settings import settings_from_env
 
 _log = logging.getLogger("sdnman.backend.cli")

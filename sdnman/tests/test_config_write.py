@@ -7,19 +7,19 @@ from pathlib import Path
 
 import pytest
 
-from sdnman.application.use_cases.edit_device_config import (
+from sdnman.config.device_config_store import JsonDeviceConfigStore
+from sdnman.config.layered_config_repository import (
+    LayeredConfigRepository,
+)
+from sdnman.config.yaml_config_repository import (
+    YamlConfigRepository,
+)
+from sdnman.use_cases.edit_device_config import (
     ConfigEditError,
     DeleteVlan,
     SavePort,
     SaveSsids,
     SaveVlan,
-)
-from sdnman.infrastructure.config.device_config_store import JsonDeviceConfigStore
-from sdnman.infrastructure.config.layered_config_repository import (
-    LayeredConfigRepository,
-)
-from sdnman.infrastructure.config.yaml_config_repository import (
-    YamlConfigRepository,
 )
 
 _PROJECT_CONFIG = Path(__file__).resolve().parents[2] / "config"

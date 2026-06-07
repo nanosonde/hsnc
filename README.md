@@ -27,10 +27,11 @@ access points** and **JetStream managed switches** (with VLANs).
 The repository contains **two independent Python packages that share no source code**:
 
 - **`sdnman/`** — the REST **backend**. It owns all device I/O, polling and
-  persistence and exposes a JSON `/api` surface. Internally it follows Clean
-  Architecture (`domain` / `application` / `infrastructure` / `backend`); the
-  composition root in `sdnman/src/sdnman/infrastructure/container.py` is the only
-  place that wires concrete implementations to the abstract ports.
+  persistence and exposes a JSON `/api` surface. It keeps a clean
+  dependency direction (entities and ports → use cases → adapters → the `backend`
+  delivery layer) in a flat module layout; the composition root in
+  `sdnman/src/sdnman/container.py` is the only place that wires concrete
+  implementations to the abstract ports.
 - **`sdnweb/`** — the **frontend**. A pure presentation tier (Flask + Jinja2 +
   HTMX): it holds no device connections, database or use-case logic and reaches
   the backend over HTTP for every read and write.
@@ -38,14 +39,18 @@ The repository contains **two independent Python packages that share no source c
 ```
 sdnweb (Flask routes, Jinja2, HTMX)
         v HTTP /api
-sdnman backend (REST app)
-        v
-application (use cases, DTOs, services)
-        v
-domain (entities, value objects, ports)
+sdnman backend (REST delivery: api / app / runtime / cli)
+        v calls
+use cases (+ DTOs, services)
+        v depend on
+entities, value objects, ports (interfaces)
         ^ implemented by
-infrastructure (YAML config, SQLite, device adapters, security)
+adapters (YAML config, SQLite, device drivers, security)
 ```
+
+The dependency direction above is preserved, but the modules live in a **flat
+layout** under `sdnman/src/sdnman/` rather than in nested layer folders — see the
+[package README](sdnman/README.md#layout).
 
 ### Config plane vs monitoring plane
 

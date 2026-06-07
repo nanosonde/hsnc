@@ -2,16 +2,16 @@
 
 from __future__ import annotations
 
-from sdnman.domain.entities import Device, SwitchPort, Vlan
-from sdnman.domain.enums import ConnectionType, DeviceKind, DeviceStatus, PortMode
-from sdnman.domain.value_objects import IpAddress, MacAddress
-from sdnman.infrastructure.devices.jetstream_cli_adapter import JetStreamCliAdapter
-from sdnman.infrastructure.devices.monitoring import JetStreamSshMonitoringProvider
-from sdnman.infrastructure.devices.ssh_transport import (
+from sdnman.devices.jetstream_cli_adapter import JetStreamCliAdapter
+from sdnman.devices.monitoring import JetStreamSshMonitoringProvider
+from sdnman.devices.ssh_transport import (
     FakeSshRunner,
     SshConnectionResolver,
     SshConnectionSettings,
 )
+from sdnman.entities import Device, SwitchPort, Vlan
+from sdnman.enums import ConnectionType, DeviceKind, DeviceStatus, PortMode
+from sdnman.value_objects import IpAddress, MacAddress
 
 _SYSTEM_INFO = (
     "Device Description - JetStream Gigabit Smart Switch (mock)\n"

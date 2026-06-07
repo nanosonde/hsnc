@@ -4,12 +4,12 @@ from __future__ import annotations
 
 import copy
 
-from sdnman.application.use_cases.apply_config import ApplyConfig, PlanApply
-from sdnman.application.use_cases.config_diff import GetConfigDiff
-from sdnman.domain.entities import Device, Vlan
-from sdnman.domain.enums import DeviceKind, DeviceStatus
-from sdnman.domain.interfaces import DeviceAdapter, DeviceAdapterFactory
-from sdnman.domain.value_objects import IpAddress, MacAddress
+from sdnman.entities import Device, Vlan
+from sdnman.enums import DeviceKind, DeviceStatus
+from sdnman.interfaces import DeviceAdapter, DeviceAdapterFactory
+from sdnman.use_cases.apply_config import ApplyConfig, PlanApply
+from sdnman.use_cases.config_diff import GetConfigDiff
+from sdnman.value_objects import IpAddress, MacAddress
 
 from .fakes import (
     FakeAppliedConfigStore,

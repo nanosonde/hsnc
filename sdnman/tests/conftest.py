@@ -4,14 +4,14 @@ from __future__ import annotations
 
 import pytest
 
-from sdnman.domain.entities import Client, Device, Site, User
-from sdnman.domain.enums import (
+from sdnman.entities import Client, Device, Site, User
+from sdnman.enums import (
     ConnectionType,
     DeviceKind,
     DeviceStatus,
     Role,
 )
-from sdnman.domain.value_objects import (
+from sdnman.value_objects import (
     DataVolume,
     IpAddress,
     MacAddress,

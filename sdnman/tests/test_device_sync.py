@@ -2,12 +2,12 @@
 
 from __future__ import annotations
 
-from sdnman.application.use_cases.delete_device import DeleteDevice
-from sdnman.application.use_cases.sync_device_config import SyncDeviceConfig
-from sdnman.domain.entities import Device
-from sdnman.domain.enums import DeviceKind
-from sdnman.domain.interfaces import DeviceAdapter, DeviceAdapterFactory
-from sdnman.domain.value_objects import MacAddress
+from sdnman.entities import Device
+from sdnman.enums import DeviceKind
+from sdnman.interfaces import DeviceAdapter, DeviceAdapterFactory
+from sdnman.use_cases.delete_device import DeleteDevice
+from sdnman.use_cases.sync_device_config import SyncDeviceConfig
+from sdnman.value_objects import MacAddress
 
 from .fakes import (
     FakeAdapterFactory,
@@ -106,7 +106,7 @@ def test_delete_device_removes_from_inventory_and_snapshot(config):
 
 
 def test_mock_adapter_fetch_config_returns_device():
-    from sdnman.infrastructure.devices.mock_adapter import MockDeviceAdapter
+    from sdnman.devices.mock_adapter import MockDeviceAdapter
 
     device = Device(
         id="switch-1",

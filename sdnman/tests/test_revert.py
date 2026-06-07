@@ -4,15 +4,15 @@ from __future__ import annotations
 
 import copy
 
-from sdnman.application.use_cases.config_diff import GetConfigDiff
-from sdnman.application.use_cases.revert_config import RevertPendingChanges
-from sdnman.domain.entities import Vlan
-from sdnman.infrastructure.config.applied_config_store import CurrentConfigStore
-from sdnman.infrastructure.config.device_config_store import JsonDeviceConfigStore
-from sdnman.infrastructure.config.layered_config_repository import (
+from sdnman.config.applied_config_store import CurrentConfigStore
+from sdnman.config.device_config_store import JsonDeviceConfigStore
+from sdnman.config.layered_config_repository import (
     LayeredConfigRepository,
 )
-from sdnman.infrastructure.config.yaml_config_repository import YamlConfigRepository
+from sdnman.config.yaml_config_repository import YamlConfigRepository
+from sdnman.entities import Vlan
+from sdnman.use_cases.config_diff import GetConfigDiff
+from sdnman.use_cases.revert_config import RevertPendingChanges
 
 from .fakes import FakeAppliedConfigStore, FakeConfigWriter
 

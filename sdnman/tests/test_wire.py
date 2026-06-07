@@ -5,25 +5,25 @@ from __future__ import annotations
 import json
 from datetime import datetime
 
-from sdnman.application.dtos import (
+from sdnman.devices.ssh_transport import SshError
+from sdnman.dtos import (
     DeviceDetail,
     DeviceRow,
     PagedClients,
     PortRow,
     VlanRow,
 )
-from sdnman.application.use_cases.edit_device_config import (
+from sdnman.entities import ApplyEvent, ApplyOutcome, FieldChange
+from sdnman.use_cases.edit_device_config import (
     ConfigEditError,
     DeviceNotFoundError,
 )
-from sdnman.application.wire import (
+from sdnman.wire import (
     DEFAULT_ERROR_STATUS,
     error_envelope,
     status_for_exception,
     to_jsonable,
 )
-from sdnman.domain.entities import ApplyEvent, ApplyOutcome, FieldChange
-from sdnman.infrastructure.devices.ssh_transport import SshError
 
 
 def test_to_jsonable_serializes_nested_dataclass_to_json_safe_dict():

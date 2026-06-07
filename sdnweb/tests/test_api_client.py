@@ -13,7 +13,7 @@ from io import BytesIO
 from pathlib import Path
 
 import pytest
-from sdnman.infrastructure.container import Settings
+from sdnman.container import Settings
 
 from sdnweb import viewtypes as vt
 from sdnweb.api_client import DeviceNotFoundError

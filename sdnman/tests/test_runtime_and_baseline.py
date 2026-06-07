@@ -5,16 +5,16 @@ from __future__ import annotations
 import time
 from dataclasses import replace
 
-from sdnman.application.use_cases.baseline import ReadBaseline
-from sdnman.domain.entities import Client, Device, SwitchPort, Vlan
-from sdnman.domain.enums import ConnectionType, DeviceKind, DeviceStatus, PortMode
-from sdnman.domain.interfaces import DeviceAdapter, DeviceAdapterFactory
-from sdnman.domain.value_objects import IpAddress, MacAddress
-from sdnman.infrastructure.devices.connection_pool import ConnectionPool
-from sdnman.infrastructure.devices.runtime_monitoring import (
+from sdnman.devices.connection_pool import ConnectionPool
+from sdnman.devices.runtime_monitoring import (
     RuntimeStoreMonitoringProvider,
 )
-from sdnman.infrastructure.persistence.sqlite_runtime_store import SqliteRuntimeStore
+from sdnman.entities import Client, Device, SwitchPort, Vlan
+from sdnman.enums import ConnectionType, DeviceKind, DeviceStatus, PortMode
+from sdnman.interfaces import DeviceAdapter, DeviceAdapterFactory
+from sdnman.persistence.sqlite_runtime_store import SqliteRuntimeStore
+from sdnman.use_cases.baseline import ReadBaseline
+from sdnman.value_objects import IpAddress, MacAddress
 
 from .fakes import (
     FakeApplyHistoryStore,

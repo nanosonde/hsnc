@@ -4,16 +4,16 @@ from __future__ import annotations
 
 from datetime import UTC, datetime
 
-from sdnman.application.services import NetworkStateService
-from sdnman.application.use_cases.authenticate_user import AuthenticateUser
-from sdnman.application.use_cases.get_dashboard_summary import GetDashboardSummary
-from sdnman.application.use_cases.get_topology import GetTopology
-from sdnman.application.use_cases.list_clients import ListClients
-from sdnman.application.use_cases.list_devices import (
+from sdnman.services import NetworkStateService
+from sdnman.use_cases.authenticate_user import AuthenticateUser
+from sdnman.use_cases.get_dashboard_summary import GetDashboardSummary
+from sdnman.use_cases.get_topology import GetTopology
+from sdnman.use_cases.list_clients import ListClients
+from sdnman.use_cases.list_devices import (
     GetDeviceDetail,
     ListDevices,
 )
-from sdnman.application.use_cases.poll_device_state import PollDeviceState
+from sdnman.use_cases.poll_device_state import PollDeviceState
 
 from .fakes import FakeRuntimeStore, FakeTopologyProvider
 
@@ -90,7 +90,7 @@ def test_list_clients_search(config, monitoring):
 
 
 def test_network_scrapes_every_sweep(config):
-    from sdnman.domain.interfaces import MonitoringProvider, MonitoringProviderFactory
+    from sdnman.interfaces import MonitoringProvider, MonitoringProviderFactory
 
     class _CountingProvider(MonitoringProvider):
         def __init__(self) -> None:

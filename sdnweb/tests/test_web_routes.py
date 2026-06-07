@@ -13,7 +13,7 @@ import os
 from pathlib import Path
 
 import pytest
-from sdnman.infrastructure.container import Settings
+from sdnman.container import Settings
 
 from sdnweb.app import create_app
 

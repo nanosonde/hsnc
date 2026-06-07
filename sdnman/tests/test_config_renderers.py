@@ -4,15 +4,15 @@ from __future__ import annotations
 
 import copy
 
-from sdnman.application.use_cases.config_diff import GetConfigDiff
-from sdnman.domain.entities import Device, SwitchPort, Vlan
-from sdnman.domain.enums import DeviceKind, PortMode
-from sdnman.domain.value_objects import IpAddress, MacAddress
-from sdnman.infrastructure.devices.config_renderers import (
+from sdnman.devices.config_renderers import (
     DefaultConfigRendererFactory,
     JetStreamCliRenderer,
     UciConfigRenderer,
 )
+from sdnman.entities import Device, SwitchPort, Vlan
+from sdnman.enums import DeviceKind, PortMode
+from sdnman.use_cases.config_diff import GetConfigDiff
+from sdnman.value_objects import IpAddress, MacAddress
 
 from .fakes import FakeAppliedConfigStore
 

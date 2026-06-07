@@ -14,7 +14,7 @@ from pathlib import Path
 import pytest
 
 from sdnman.backend.app import create_api_app
-from sdnman.infrastructure.container import Container, Settings
+from sdnman.container import Container, Settings
 
 _FIXTURES = Path(__file__).resolve().parent / "web_fixtures"
 
