@@ -1,0 +1,60 @@
+{% extends "base.html" %}
+{% block title %}Apply History · hsnc{% endblock %}
+{% block content %}
+<a href="{{ url_for('config.pending') }}" class="muted">&larr; Pending Changes</a>
+
+<div class="card card-pad" style="margin-top:10px">
+  <h3 class="card-title">Apply History</h3>
+  {% if not events %}
+  <p class="muted">No configuration has been applied yet.</p>
+  {% endif %}
+</div>
+
+{% for event in events %}
+<div class="card card-pad" style="margin-top:16px">
+  <h3 class="card-title">
+    {{ event.applied_at.strftime('%Y-%m-%d %H:%M:%S UTC') }}
+    <span class="pill" style="margin-left:8px">
+      {{ 'Re-read' if event.action == 'reread' else 'Apply' }}
+    </span>
+    <span class="status {{ 'connected' if event.ok else 'disconnected' }}" style="margin-left:8px">
+      {{ 'SUCCESS' if event.ok else 'PARTIAL/FAILED' }}
+    </span>
+    <span class="muted" style="margin-left:8px">by {{ event.username or 'unknown' }}</span>
+  </h3>
+  <div class="table-wrap">
+    <table class="data">
+      <thead><tr><th>Device</th><th>Result</th><th>Changes</th></tr></thead>
+      <tbody>
+        {% for o in event.outcomes %}
+        <tr>
+          <td>{{ o.device_name }}</td>
+          <td>
+            <span class="status {{ 'connected' if o.ok else 'disconnected' }}">
+              {{ 'OK' if o.ok else 'FAILED' }}
+            </span>
+          </td>
+          <td>
+            {% if o.message %}<div class="muted">{{ o.message }}</div>{% endif %}
+            {% if o.changes %}
+            <ul style="margin:0; padding-left:18px">
+              {% for c in o.changes %}
+              <li>
+                <strong>{{ c.field }}:</strong>
+                <span class="muted">{{ c.old if c.old else '∅' }}</span>
+                &rarr; {{ c.new if c.new else '∅' }}
+              </li>
+              {% endfor %}
+            </ul>
+            {% elif not o.message %}
+            <span class="muted">-</span>
+            {% endif %}
+          </td>
+        </tr>
+        {% endfor %}
+      </tbody>
+    </table>
+  </div>
+</div>
+{% endfor %}
+{% endblock %}

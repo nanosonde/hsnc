@@ -1,0 +1,75 @@
+{% extends "base.html" %}
+{% block title %}Dashboard · hsnc{% endblock %}
+{% block content %}
+
+{% if diff and diff.has_changes %}
+<div class="card card-pad" style="margin-bottom:14px; border-left:4px solid var(--accent, #ff9800); display:flex; align-items:center; justify-content:space-between; gap:12px">
+  <div>
+    <strong>Pending configuration changes</strong>
+    <span class="muted">&mdash; {{ diff.change_count }} device{{ '' if diff.change_count == 1 else 's' }} differ from what was last applied.</span>
+  </div>
+  <a class="btn btn-primary" href="{{ url_for('config.pending') }}">Review &amp; Apply</a>
+</div>
+{% endif %}
+
+<div class="card summary-strip">
+  {% for stat in summary.stats %}
+  <div class="stat">
+    <div class="value {% if stat.value in ['N/A', 'Offline'] %}muted{% endif %}">{{ stat.value }}</div>
+    <div class="label">{{ stat.label }}</div>
+  </div>
+  {% endfor %}
+</div>
+
+<div class="kpi-row">
+  <div class="card kpi">
+    <div class="kpi-icon">
+      <svg viewBox="0 0 24 24" width="28" height="28" fill="none" stroke="currentColor" stroke-width="2"><rect x="3" y="5" width="18" height="6" rx="1"/><rect x="3" y="13" width="18" height="6" rx="1"/></svg>
+    </div>
+    <div>
+      <div class="kpi-value">{{ summary.device_count }}</div>
+      <div class="kpi-label">Devices</div>
+    </div>
+  </div>
+  <div class="card kpi">
+    <div class="kpi-icon">
+      <svg viewBox="0 0 24 24" width="28" height="28" fill="none" stroke="currentColor" stroke-width="2"><circle cx="9" cy="8" r="3"/><path d="M3 20a6 6 0 0 1 12 0"/><circle cx="17" cy="9" r="2.5"/></svg>
+    </div>
+    <div>
+      <div class="kpi-value">{{ summary.admin_count }}</div>
+      <div class="kpi-label">Admins</div>
+    </div>
+  </div>
+  <div class="card kpi">
+    <div class="kpi-icon">
+      <svg viewBox="0 0 24 24" width="28" height="28" fill="none" stroke="currentColor" stroke-width="2"><path d="M12 4a6 6 0 0 1 6 6c0 4 2 5 2 5H4s2-1 2-5a6 6 0 0 1 6-6zM10 20a2 2 0 0 0 4 0"/></svg>
+    </div>
+    <div>
+      <div class="kpi-value">{{ summary.alert_count }}</div>
+      <div class="kpi-label">Alerts</div>
+    </div>
+  </div>
+</div>
+
+<div class="card card-pad">
+  <h3 class="card-title">Association Failures</h3>
+  <div class="assoc-total">{{ summary.association_failure_total }}</div>
+  <div class="assoc-bar"></div>
+  <div class="table-wrap">
+    <table class="data">
+      <thead><tr><th>Type</th><th style="text-align:right">Count</th></tr></thead>
+      <tbody>
+        {% for row in summary.association_failures %}
+        <tr>
+          <td><a href="#">{{ row.category }}</a></td>
+          <td style="text-align:right">{{ row.count }}</td>
+        </tr>
+        {% else %}
+        <tr><td colspan="2" class="muted">No data.</td></tr>
+        {% endfor %}
+      </tbody>
+    </table>
+  </div>
+</div>
+
+{% endblock %}

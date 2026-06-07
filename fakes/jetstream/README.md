@@ -1,7 +1,7 @@
 # Mock TP-Link JetStream switch (CLI over SSH)
 
 A throwaway container that behaves like a TP-Link JetStream smart switch for the
-sdn-manager switch adapter. It runs a real `sshd` whose login shell is a fake
+hsnc switch adapter. It runs a real `sshd` whose login shell is a fake
 JetStream CLI REPL backed by a persisted running/startup config.
 
 This is a **device simulator**, not part of the application. The real

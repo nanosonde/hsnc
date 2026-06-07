@@ -1,4 +1,4 @@
-# sdn-manager — developer task runner.
+# hsnc — developer task runner.
 #
 # Uses the project virtualenv (.venv) automatically when present, otherwise
 # falls back to the system python3. Override the interpreter with:
@@ -9,19 +9,19 @@
 PYTHON ?= $(shell if [ -x .venv/bin/python ]; then echo .venv/bin/python; else echo python3; fi)
 PYBIN  := $(dir $(abspath $(PYTHON)))
 
-PACKAGES      := sdnman sdnweb
+PACKAGES      := hsnc hsncweb
 SMOKE_TEST    := fakes/smoke_test.sh
 FAKES_COMPOSE := fakes/docker-compose.yml
 COMPOSE       := docker-compose.yml
 DOCKER        ?= docker
-IMAGE         ?= sdn-manager:latest
+IMAGE         ?= hsnc:latest
 
 .DEFAULT_GOAL := help
 
 .PHONY: help check lint unit integration test all clean up down logs fakes-up fakes-down docker-build docker-clean
 
 help: ## Show this help.
-	@echo "sdn-manager make targets:"
+	@echo "hsnc make targets:"
 	@grep -E '^[a-zA-Z_-]+:.*?## .*$$' $(MAKEFILE_LIST) \
 		| sort \
 		| awk 'BEGIN {FS = ":.*?## "}; {printf "  \033[36m%-12s\033[0m %s\n", $$1, $$2}'
@@ -40,7 +40,7 @@ integration: ## Run integration tests against the fake SSH devices (needs docker
 
 up: ## Build and start the application container (end users); UI on http://localhost:8080.
 	$(DOCKER) compose -f $(COMPOSE) up -d --build
-	@echo "sdn-manager is starting on http://localhost:8080 (default login admin/admin)."
+	@echo "hsnc is starting on http://localhost:8080 (default login admin/admin)."
 
 down: ## Stop and remove the application container (data volume is kept).
 	$(DOCKER) compose -f $(COMPOSE) down

@@ -7,14 +7,14 @@ WORKDIR /app
 ENV PIP_NO_CACHE_DIR=1 PIP_DISABLE_PIP_VERSION_CHECK=1
 
 COPY README.md ./
-COPY sdnman ./sdnman
-COPY sdnweb ./sdnweb
+COPY hsnc ./hsnc
+COPY hsncweb ./hsncweb
 
 # Build a wheel per package so the runtime image stays lean and the two code bases
 # stay independent.
 RUN python -m pip install --upgrade pip build \
-    && python -m build --wheel --outdir /dist ./sdnman \
-    && python -m build --wheel --outdir /dist ./sdnweb
+    && python -m build --wheel --outdir /dist ./hsnc \
+    && python -m build --wheel --outdir /dist ./hsncweb
 
 
 # ---------- runtime stage ----------
@@ -22,13 +22,13 @@ FROM python:3.12-slim AS runtime
 
 ENV PYTHONUNBUFFERED=1 \
     PYTHONDONTWRITEBYTECODE=1 \
-    SDNMAN_CONFIG_DIR=/data/config \
-    SDNMAN_DATA_DIR=/data \
-    SDNMAN_USE_MOCK_DEVICES=1 \
-    SDNMAN_POLL_INTERVAL=30 \
-    SDNMAN_RETENTION_DAYS=30 \
-    SDNMAN_BASELINE_ON_START=1 \
-    SDNMAN_API_BASE_URL=http://127.0.0.1:8081 \
+    HSNC_CONFIG_DIR=/data/config \
+    HSNC_DATA_DIR=/data \
+    HSNC_USE_MOCK_DEVICES=1 \
+    HSNC_POLL_INTERVAL=30 \
+    HSNC_RETENTION_DAYS=30 \
+    HSNC_BASELINE_ON_START=1 \
+    HSNC_API_BASE_URL=http://127.0.0.1:8081 \
     S6_BEHAVIOUR_IF_STAGE2_FAILS=2
 
 # s6-overlay supervises the long-running processes (web frontend + REST backend)
@@ -54,7 +54,7 @@ WORKDIR /app
 COPY --from=build /dist/*.whl /tmp/
 # Install both wheels. The backend gets the [ssh] extra so real-device mode
 # (paramiko) works out of the box; gunicorn is a dependency of both.
-RUN python -m pip install --no-cache-dir "$(ls /tmp/sdn_manager-*.whl)[ssh]" $(ls /tmp/sdnweb-*.whl) \
+RUN python -m pip install --no-cache-dir "$(ls /tmp/hsnc-*.whl)[ssh]" $(ls /tmp/hsnc_web-*.whl) \
     && rm -f /tmp/*.whl
 
 # Seed configuration baked into the image; copied into the volume on first run.

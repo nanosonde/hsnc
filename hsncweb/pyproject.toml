@@ -1,0 +1,58 @@
+[build-system]
+requires = ["setuptools>=68"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "hsnc-web"
+version = "0.1.0"
+description = "Standalone Flask web frontend for hsnc. A pure presentation tier that talks to the hsnc REST backend over HTTP."
+readme = "README.md"
+requires-python = ">=3.11"
+license = { text = "AGPL-3.0-or-later" }
+authors = [{ name = "hsnc contributors" }]
+classifiers = [
+    "License :: OSI Approved :: GNU Affero General Public License v3 or later (AGPLv3+)",
+]
+dependencies = [
+    "Flask>=3.0",
+    "Jinja2>=3.1",
+    "Werkzeug>=3.0",
+    "click>=8.1",
+    "gunicorn>=21.2",
+]
+
+[project.optional-dependencies]
+# The web test harness boots a real backend in-process, so the test environment
+# also needs the hsnc package installed (editable) alongside these tools.
+dev = [
+    "pytest>=8.0",
+    "pytest-cov>=4.1",
+    "ruff>=0.4",
+]
+
+[project.scripts]
+hsnc-web = "hsncweb.cli:main"
+
+[tool.setuptools.packages.find]
+where = ["src"]
+
+[tool.setuptools.package-data]
+"hsncweb" = [
+    "templates/*.html",
+    "templates/**/*.html",
+    "static/css/*.css",
+    "static/js/*.js",
+]
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]
+pythonpath = ["src"]
+addopts = "-q"
+
+[tool.ruff]
+line-length = 100
+target-version = "py311"
+src = ["src", "tests"]
+
+[tool.ruff.lint]
+select = ["E", "F", "I", "UP", "B"]

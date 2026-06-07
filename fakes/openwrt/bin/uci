@@ -1,7 +1,7 @@
 #!/usr/bin/env python3
 """Minimal fake `uci` for the mock OpenWrt device.
 
-Implements just the surface the sdn-manager OpenWrt adapter/renderer uses:
+Implements just the surface the hsnc OpenWrt adapter/renderer uses:
 
     uci show [<pkg>[.<section>[.<option>]]]
     uci get  <pkg>.<section>.<option>

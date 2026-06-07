@@ -2,7 +2,7 @@
 """Fake TP-Link JetStream CLI for the mock switch device.
 
 Acts as the login shell (sshd ForceCommand) for the `admin` user. It emulates just
-enough of the JetStream CLI for the sdn-manager switch adapter/renderer:
+enough of the JetStream CLI for the hsnc switch adapter/renderer:
 
   config:  enable, configure[ terminal], hostname, vlan/name/exit,
            interface gigabitEthernet 1/0/N, switchport mode/access vlan/

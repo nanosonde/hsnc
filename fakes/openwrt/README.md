@@ -1,7 +1,7 @@
 # Mock OpenWrt device (UCI + ubus over SSH)
 
 A throwaway container that behaves like an OpenWrt router/AP for the purposes of the
-sdn-manager OpenWrt SSH adapter. It runs a real `sshd` whose shell has fake `uci` and
+hsnc OpenWrt SSH adapter. It runs a real `sshd` whose shell has fake `uci` and
 `ubus` commands on `PATH`, backed by a persisted UCI state file.
 
 This is a **device simulator**, not part of the application. The real

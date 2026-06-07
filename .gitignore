@@ -30,15 +30,15 @@ coverage.xml
 /data/config-backups/
 
 # Runtime data when the backend runs from inside the package (default data dir
-# resolves to sdnman/data/)
-/sdnman/data/*.db
-/sdnman/data/*.db-*
-/sdnman/data/*.sock
-/sdnman/data/backups/
-/sdnman/data/desired_config.json
-/sdnman/data/current_config.json
-/sdnman/data/history.jsonl
-/sdnman/data/config-backups/
+# resolves to hsnc/data/)
+/hsnc/data/*.db
+/hsnc/data/*.db-*
+/hsnc/data/*.sock
+/hsnc/data/backups/
+/hsnc/data/desired_config.json
+/hsnc/data/current_config.json
+/hsnc/data/history.jsonl
+/hsnc/data/config-backups/
 
 # Local device inventory (copied from config/devices.yaml.example)
 /config/devices.yaml

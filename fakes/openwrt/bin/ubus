@@ -1,7 +1,7 @@
 #!/usr/bin/env python3
 """Minimal fake `ubus` for the mock OpenWrt device.
 
-Implements the read surface the sdn-manager OpenWrt adapter uses:
+Implements the read surface the hsnc OpenWrt adapter uses:
 
     ubus call system board
     ubus call network.interface.<name> status

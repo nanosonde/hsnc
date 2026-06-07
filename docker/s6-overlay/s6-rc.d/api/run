@@ -12,4 +12,4 @@ exec /command/s6-setuidgid appuser \
     --workers 1 \
     --threads 8 \
     --timeout 120 \
-    sdnman.backend.wsgi:app
+    hsnc.backend.wsgi:app

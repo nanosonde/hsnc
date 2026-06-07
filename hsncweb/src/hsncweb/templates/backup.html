@@ -1,0 +1,32 @@
+{% extends "base.html" %}
+{% block title %}Backup · hsnc{% endblock %}
+{% block content %}
+<div class="grid-2">
+  <div class="card card-pad">
+    <h3 class="card-title">Export Backup</h3>
+    <p class="muted">Download a ZIP archive containing the YAML configuration and all
+      runtime history (device status, client sessions, association failures).</p>
+    {% if is_admin() %}
+    <a class="btn btn-primary" href="{{ url_for('backup.export') }}">Download Backup</a>
+    {% else %}
+    <p class="muted">Only administrators can export backups.</p>
+    {% endif %}
+  </div>
+
+  <div class="card card-pad">
+    <h3 class="card-title">Import Backup</h3>
+    <p class="muted">Restore configuration and runtime history from a previously
+      exported archive. This replaces current data.</p>
+    {% if is_admin() %}
+    <form method="post" action="{{ url_for('backup.import_backup') }}" enctype="multipart/form-data">
+      <div class="field">
+        <input type="file" name="archive" accept=".zip" required />
+      </div>
+      <button class="btn btn-primary" type="submit">Import</button>
+    </form>
+    {% else %}
+    <p class="muted">Only administrators can import backups.</p>
+    {% endif %}
+  </div>
+</div>
+{% endblock %}

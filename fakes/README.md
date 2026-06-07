@@ -1,6 +1,6 @@
 # Mock devices
 
-Controllable simulators of the network devices sdn-manager manages, each as its own
+Controllable simulators of the network devices hsnc manages, each as its own
 Docker container reachable over **SSH**. They exist so the real device adapters can be
 developed and tested against realistic SSH targets without physical hardware.
 
@@ -40,7 +40,7 @@ docker compose -f fakes/docker-compose.yml down -v
 
 ## How the real adapters connect
 
-`DefaultDeviceAdapterFactory(use_mock=False)` (env `SDNMAN_USE_MOCK_DEVICES=0`) routes
+`DefaultDeviceAdapterFactory(use_mock=False)` (env `HSNC_USE_MOCK_DEVICES=0`) routes
 by device kind to the SSH adapters:
 
 - `GATEWAY` / `ACCESS_POINT` → `OpenWrtSshAdapter` (ssh user `root`, port 22) → `mock-openwrt`
@@ -51,21 +51,21 @@ and `mock-jetstream` on port 22; from the host they are on `localhost:2201` / `:
 
 The adapters need the optional SSH driver (`pip install '.[ssh]'`). Per-device host,
 port and username come from a `connection:` block in `config/devices.yaml`; passwords
-are resolved only from the environment (`SDNMAN_OPENWRT_SSH_PASSWORD`,
-`SDNMAN_JETSTREAM_SSH_PASSWORD`, or `SDNMAN_DEVICE_<ID>_PASSWORD`). The SSH adapters
+are resolved only from the environment (`HSNC_OPENWRT_SSH_PASSWORD`,
+`HSNC_JETSTREAM_SSH_PASSWORD`, or `HSNC_DEVICE_<ID>_PASSWORD`). The SSH adapters
 run inside the **REST backend** (the web app only talks to it over HTTP), so drive the
 mocks through the backend:
 
 ```sh
-SDNMAN_USE_MOCK_DEVICES=0 \
-SDNMAN_SSH_HOST_OVERRIDE=127.0.0.1 \
-SDNMAN_OPENWRT_SSH_PASSWORD=openwrt \
-SDNMAN_JETSTREAM_SSH_PASSWORD=admin \
-  sdnman-ctl api   # set connection.port 2201/2202 per device, or override per run
+HSNC_USE_MOCK_DEVICES=0 \
+HSNC_SSH_HOST_OVERRIDE=127.0.0.1 \
+HSNC_OPENWRT_SSH_PASSWORD=openwrt \
+HSNC_JETSTREAM_SSH_PASSWORD=admin \
+  hsnc-ctl api   # set connection.port 2201/2202 per device, or override per run
 ```
 
 The backend reads the live baseline on start and polls the devices; run
-`sdnweb serve` in another shell to use the UI against it.
+`hsnc-web serve` in another shell to use the UI against it.
 
 ## Mapping to the sample inventory (`config/devices.yaml`)
 

@@ -1,0 +1,32 @@
+{% extends "base.html" %}
+{% block title %}Login · hsnc{% endblock %}
+{% block guest %}
+<div class="login-wrap">
+  <div class="card login-card">
+    <h1><span style="color:var(--accent);font-weight:800">H</span> hsnc</h1>
+    <p class="sub">Sign in to the network controller</p>
+    {% with messages = get_flashed_messages(with_categories=true) %}
+      {% if messages %}
+      <div class="flashes">
+        {% for category, message in messages %}
+          <div class="flash {{ category }}">{{ message }}</div>
+        {% endfor %}
+      </div>
+      {% endif %}
+    {% endwith %}
+    <form method="post" action="{{ url_for('auth.login') }}">
+      <div class="field">
+        <label for="username">Username</label>
+        <input id="username" name="username" autocomplete="username"
+               value="{{ username or '' }}" required autofocus />
+      </div>
+      <div class="field">
+        <label for="password">Password</label>
+        <input id="password" name="password" type="password"
+               autocomplete="current-password" required />
+      </div>
+      <button class="btn btn-primary" type="submit" style="width:100%">Sign In</button>
+    </form>
+  </div>
+</div>
+{% endblock %}

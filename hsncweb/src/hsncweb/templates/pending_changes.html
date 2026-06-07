@@ -1,0 +1,158 @@
+{% extends "base.html" %}
+{% block title %}Pending Changes · hsnc{% endblock %}
+{% block content %}
+<a href="{{ url_for('devices.index') }}" class="muted">&larr; Devices</a>
+
+{% set plan_by_id = {} %}
+{% for item in plan.items %}{% set _ = plan_by_id.update({item.device_id: item}) %}{% endfor %}
+
+{% set state_labels = {'added': 'New device', 'modified': 'Modified', 'removed': 'Will be removed'} %}
+{% set state_tag = {'added': 'tag-added', 'modified': 'tag-modified', 'removed': 'tag-removed'} %}
+{% set group_order = ['General', 'VLANs', 'Ports', 'Wireless'] %}
+
+<div class="card card-pad" style="margin-top:10px">
+  <h3 class="card-title">Pending Changes
+    {% if diff.has_changes %}
+    <span class="pill" style="margin-left:8px">
+      {{ diff.change_count }} device{{ '' if diff.change_count == 1 else 's' }}
+      · {{ diff.total_changes }} change{{ '' if diff.total_changes == 1 else 's' }}
+    </span>
+    {% endif %}
+  </h3>
+  {% if diff.has_changes %}
+  <p class="muted">
+    Review the <strong>current</strong> configuration on each device against the
+    <strong>new</strong> configuration that will be applied. Nothing is sent to a
+    device until you apply.
+  </p>
+  <div style="display:flex; gap:8px; align-items:center; flex-wrap:wrap">
+    {% if is_admin() %}
+    <form method="post" action="{{ url_for('config.apply') }}"
+          onsubmit="return confirm('Apply configuration to all devices?');">
+      <button class="btn btn-primary" type="submit"
+              {% if is_read_only() %}disabled title="Read-only mode is active"{% elif not plan.has_actionable %}disabled title="No applicable devices"{% endif %}>
+        Apply All
+      </button>
+    </form>
+    <form method="post" action="{{ url_for('config.revert') }}"
+          onsubmit="return confirm('Discard all pending changes and restore the last applied configuration?');">
+      <button class="btn" type="submit">Revert All Changes</button>
+    </form>
+    {% endif %}
+    <a class="btn" href="{{ url_for('config.history') }}">History</a>
+  </div>
+  {% else %}
+  <p class="muted">All devices are up to date. Nothing to apply.</p>
+  <a class="btn" href="{{ url_for('config.history') }}">History</a>
+  {% endif %}
+</div>
+
+{% for dev in diff.devices %}
+{% set item = plan_by_id.get(dev.device_id) %}
+<div class="card card-pad pending-device" style="margin-top:16px">
+  <div class="pending-head">
+    <div class="pending-head-main">
+      <span class="pending-name">{{ dev.device_name }}</span>
+      <span class="tag {{ state_tag.get(dev.state, 'tag-modified') }}">{{ state_labels.get(dev.state, dev.state) }}</span>
+      {% if dev.changes %}
+      <span class="muted">{{ dev.changes | length }} change{{ '' if dev.changes | length == 1 else 's' }}</span>
+      {% endif %}
+      {% if item and not item.supported %}
+      <span class="tag tag-warn" title="No driver for this device — apply will report it as unsupported">no driver</span>
+      {% endif %}
+    </div>
+    {% if is_admin() %}
+    <div class="pending-head-actions">
+      <form method="post" action="{{ url_for('config.revert_device', device_id=dev.device_id) }}"
+            onsubmit="return confirm('Discard pending changes for {{ dev.device_name }} and restore the last applied configuration?');">
+        <button class="btn" type="submit">Revert</button>
+      </form>
+      <form method="post" action="{{ url_for('config.apply_device', device_id=dev.device_id) }}"
+            onsubmit="return confirm('Apply configuration to {{ dev.device_name }}?');">
+        <button class="btn btn-primary" type="submit"
+                {% if is_read_only() %}disabled title="Read-only mode is active"{% elif item and not item.supported %}disabled title="No driver available"{% endif %}>
+          Apply
+        </button>
+      </form>
+    </div>
+    {% endif %}
+  </div>
+
+  {% if dev.state == 'removed' %}
+  <p class="muted">This device is no longer in the configuration and will be deprovisioned.</p>
+  {% elif not dev.changes %}
+  <p class="muted">No option-level differences detected.</p>
+  {% endif %}
+
+  {% set group_slug = {'General': 'general', 'VLANs': 'vlans', 'Ports': 'ports', 'Wireless': 'wireless'} %}
+  {% for gname in group_order %}
+  {% set grows = dev.changes | selectattr('group', 'equalto', gname) | list %}
+  {% if grows %}
+  <div class="change-group sect-{{ group_slug.get(gname, 'general') }}">
+    <div class="change-group-title">
+      <span class="sect-dot" aria-hidden="true"></span>
+      <span class="sect-name">{{ gname }}</span>
+      <span class="sect-count">{{ grows | length }}</span>
+    </div>
+    {% for c in grows %}
+    <div class="change change-{{ c.change }}">
+      <div class="change-field">
+        {{ c.field }}
+        <span class="chg-tag chg-{{ c.change }}">{{ c.change }}</span>
+      </div>
+      <div class="change-transition">
+        <div class="state state-current">
+          <span class="state-label">Current</span>
+          <span class="val">{% if c.old %}{{ c.old }}{% else %}<em class="none">not set</em>{% endif %}</span>
+        </div>
+        <div class="arrow" aria-hidden="true">&rarr;</div>
+        <div class="state state-future">
+          <span class="state-label">New</span>
+          <span class="val">{% if c.new %}{{ c.new }}{% else %}<em class="none">removed</em>{% endif %}</span>
+        </div>
+      </div>
+    </div>
+    {% endfor %}
+  </div>
+  {% endif %}
+  {% endfor %}
+
+  {% if dev.setting_diff %}
+  <div class="change-group sect-uci">
+    <div class="change-group-title">
+      <span class="sect-dot" aria-hidden="true"></span>
+      <span class="sect-name">UCI changes</span>
+      <span class="sect-platform">{{ dev.platform }}</span>
+      <span class="sect-count">{{ dev.setting_diff | length }}</span>
+    </div>
+    <div class="uci-changes">
+      {% for s in dev.setting_diff %}
+      <div class="uci-row uci-{{ s.change }}">
+        <span class="uci-path">{{ s.path }}</span>
+        <span class="uci-vals">
+          {% if s.change == 'added' %}
+            = <span class="uci-new">'{{ s.new }}'</span>
+          {% elif s.change == 'removed' %}
+            <span class="uci-old">'{{ s.old }}'</span> <span class="uci-del-note">removed</span>
+          {% else %}
+            <span class="uci-old">'{{ s.old }}'</span>
+            <span class="uci-to">&rarr;</span>
+            <span class="uci-new">'{{ s.new }}'</span>
+          {% endif %}
+        </span>
+      </div>
+      {% endfor %}
+    </div>
+  </div>
+  {% endif %}
+
+  {% if dev.command_diff %}
+  <details class="cmd-details">
+    <summary>Show device commands &middot; <strong>{{ dev.platform }}</strong></summary>
+    <pre class="cmd-diff"><code>{% for line in dev.command_diff if line.change != 'removed' %}{{ line.text }}
+{% endfor %}</code></pre>
+  </details>
+  {% endif %}
+</div>
+{% endfor %}
+{% endblock %}

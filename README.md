@@ -1,4 +1,6 @@
-# sdn-manager
+# hsnc
+
+*A self-hosted **h**ome & **s**mall-**n**etwork **c**ontroller.*
 
 An open-source, self-hosted network controller UI for **OpenWrt-based gateways &
 access points** and **JetStream managed switches** (with VLANs).
@@ -10,14 +12,14 @@ access points** and **JetStream managed switches** (with VLANs).
 - **Apply history:** append-only JSONL
 - **Backup:** export/import a single ZIP (config + runtime + history)
 - **Architecture:** two standalone packages in one repo — a REST **backend**
-  (`sdnman/`) and a server-rendered web **frontend** (`sdnweb/`) that share no code
+  (`hsnc/`) and a server-rendered web **frontend** (`hsncweb/`) that share no code
 - **Packaging:** Docker container running supervised processes (web + REST backend) via s6-overlay
 
 > **Status:** The real device drivers (OpenWrt SSH/UCI and JetStream SSH/CLI) are
 > **fully implemented** and exercised by the test suite against the throwaway fake
 > SSH containers in [`fakes/`](fakes/). The bundled `docker-compose.yml` targets
-> real hardware (`SDNMAN_USE_MOCK_DEVICES=0`) and requires your own
-> `config/devices.yaml`. For a hardware-free trial, set `SDNMAN_USE_MOCK_DEVICES=1`
+> real hardware (`HSNC_USE_MOCK_DEVICES=0`) and requires your own
+> `config/devices.yaml`. For a hardware-free trial, set `HSNC_USE_MOCK_DEVICES=1`
 > to serve the runtime/monitoring plane from a built-in **mock provider** with a
 > sample inventory — VLAN, port and wireless editing plus the review/apply
 > workflow then work end-to-end without any devices.
@@ -26,20 +28,20 @@ access points** and **JetStream managed switches** (with VLANs).
 
 The repository contains **two independent Python packages that share no source code**:
 
-- **`sdnman/`** — the REST **backend**. It owns all device I/O, polling and
+- **`hsnc/`** — the REST **backend**. It owns all device I/O, polling and
   persistence and exposes a JSON `/api` surface. It keeps a clean
   dependency direction (entities and ports → use cases → adapters → the `backend`
   delivery layer) in a flat module layout; the composition root in
-  `sdnman/src/sdnman/container.py` is the only place that wires concrete
+  `hsnc/src/hsnc/container.py` is the only place that wires concrete
   implementations to the abstract ports.
-- **`sdnweb/`** — the **frontend**. A pure presentation tier (Flask + Jinja2 +
+- **`hsncweb/`** — the **frontend**. A pure presentation tier (Flask + Jinja2 +
   HTMX): it holds no device connections, database or use-case logic and reaches
   the backend over HTTP for every read and write.
 
 ```
-sdnweb (Flask routes, Jinja2, HTMX)
+hsncweb (Flask routes, Jinja2, HTMX)
         v HTTP /api
-sdnman backend (REST delivery: api / app / runtime / cli)
+hsnc backend (REST delivery: api / app / runtime / cli)
         v calls
 use cases (+ DTOs, services)
         v depend on
@@ -49,8 +51,8 @@ adapters (YAML config, SQLite, device drivers, security)
 ```
 
 The dependency direction above is preserved, but the modules live in a **flat
-layout** under `sdnman/src/sdnman/` rather than in nested layer folders — see the
-[package README](sdnman/README.md#layout).
+layout** under `hsnc/src/hsnc/` rather than in nested layer folders — see the
+[package README](hsnc/README.md#layout).
 
 ### Config plane vs monitoring plane
 
@@ -92,18 +94,18 @@ A failed poll for one device never affects the others or the web UI.
 The container runs **two long-running processes** under s6-overlay that share
 `/data`:
 
-- **web** (`gunicorn sdnweb.wsgi:app`) — serves the UI. It holds **no device
+- **web** (`gunicorn hsncweb.wsgi:app`) — serves the UI. It holds **no device
   connections** and no database: every read and write is an HTTP call to the
   backend.
-- **api / backend** (`gunicorn sdnman.backend.wsgi:app`) — the always-on owner of
+- **api / backend** (`gunicorn hsnc.backend.wsgi:app`) — the always-on owner of
   **all device I/O**. It keeps a persistent SSH connection warm to every device
   (each on its own thread, reconnecting independently on loss), serves the `/api`
   surface the web app calls, and is the **only writer** of the runtime database
   (`runtime.db`, SQLite in WAL mode), the apply history (`history.jsonl`), the
   staged configuration (`desired_config.json`) and the baseline
   (`current_config.json`). On each poll cycle it records a snapshot and prunes
-  rows older than `SDNMAN_RETENTION_DAYS`. On startup, gated by
-  `SDNMAN_BASELINE_ON_START` (default on), it reads each device's live
+  rows older than `HSNC_RETENTION_DAYS`. On startup, gated by
+  `HSNC_BASELINE_ON_START` (default on), it reads each device's live
   configuration into `current_config.json` and records an `action="baseline"`
   event so the starting point is visible and survives restarts.
 
@@ -115,12 +117,12 @@ makes the web UI fast: an unreachable device can never slow down or block a page
 Two console scripts, one per package:
 
 ```bash
-sdnweb serve                # run the web frontend (development)
+hsnc-web serve                # run the web frontend (development)
 
-sdnman-ctl api              # run the REST backend (owns device I/O; used by the container)
-sdnman-ctl poll             # run one device poll cycle and exit
-sdnman-ctl backup export ./backup.zip
-sdnman-ctl backup import ./backup.zip
+hsnc-ctl api              # run the REST backend (owns device I/O; used by the container)
+hsnc-ctl poll             # run one device poll cycle and exit
+hsnc-ctl backup export ./backup.zip
+hsnc-ctl backup import ./backup.zip
 ```
 
 ## Quick start (Docker)
@@ -144,8 +146,8 @@ For a **hardware-free demo**, build the image and run it with mock devices
 instead (seeds a sample inventory automatically):
 
 ```bash
-docker build -t sdn-manager:latest .
-docker run --rm -p 8080:8080 -e SDNMAN_USE_MOCK_DEVICES=1 sdn-manager:latest
+docker build -t hsnc:latest .
+docker run --rm -p 8080:8080 -e HSNC_USE_MOCK_DEVICES=1 hsnc:latest
 ```
 
 Default logins (change immediately): `admin` / `admin` and `viewer` / `viewer`.
@@ -160,15 +162,15 @@ needs the backend running (the web test harness also imports it), so install bot
 
 ```bash
 python3 -m venv .venv && . .venv/bin/activate
-pip install -e "./sdnman[dev,ssh]" -e "./sdnweb[dev]"
+pip install -e "./hsnc[dev,ssh]" -e "./hsncweb[dev]"
 
-sdnman-ctl api                    # REST backend on http://localhost:8081 (owns device I/O)
-sdnweb serve --debug              # web UI on http://localhost:8080, in a second shell
+hsnc-ctl api                    # REST backend on http://localhost:8081 (owns device I/O)
+hsnc-web serve --debug              # web UI on http://localhost:8080, in a second shell
 ```
 
-In mock mode (`SDNMAN_USE_MOCK_DEVICES=1`, the default) the backend uses the demo
+In mock mode (`HSNC_USE_MOCK_DEVICES=1`, the default) the backend uses the demo
 providers, so no real hardware is needed. Point the frontend at a non-default
-backend with `SDNMAN_API_BASE_URL` (and `SDNMAN_API_TOKEN` when set).
+backend with `HSNC_API_BASE_URL` (and `HSNC_API_TOKEN` when set).
 
 ## Developer tasks
 
@@ -194,8 +196,8 @@ override the interpreter with `make PYTHON=/path/to/python <target>`.
 Or run the tools directly in either package:
 
 ```bash
-(cd sdnman && pytest && ruff check src tests)
-(cd sdnweb && pytest && ruff check src tests)
+(cd hsnc && pytest && ruff check src tests)
+(cd hsncweb && pytest && ruff check src tests)
 ```
 
 ## Pending changes & apply
@@ -225,13 +227,13 @@ From the UI (admin only): **Backup → Download / Import**.
 From the CLI:
 
 ```bash
-sdnman-ctl backup export ./backup.zip
-sdnman-ctl backup import ./backup.zip
+hsnc-ctl backup export ./backup.zip
+hsnc-ctl backup import ./backup.zip
 ```
 
 ## Configuration
 
-YAML files live in `SDNMAN_CONFIG_DIR` (default `./config`, or `/data/config` in Docker):
+YAML files live in `HSNC_CONFIG_DIR` (default `./config`, or `/data/config` in Docker):
 
 | File                   | Purpose                                   |
 | ---------------------- | ----------------------------------------- |
@@ -244,10 +246,10 @@ YAML files live in `SDNMAN_CONFIG_DIR` (default `./config`, or `/data/config` in
 SSH `connection` block and optional `monitoring` block). The actual device
 configuration (VLANs, ports, SSIDs, model/firmware) is **not** stored in YAML:
 
-- **`desired_config.json`** (in `SDNMAN_DATA_DIR`) — the staged/intended
+- **`desired_config.json`** (in `HSNC_DATA_DIR`) — the staged/intended
   configuration written by the web app. Reads merge it onto the connection
   profile from `devices.yaml`.
-- **`current_config.json`** (in `SDNMAN_DATA_DIR`) — the last configuration read
+- **`current_config.json`** (in `HSNC_DATA_DIR`) — the last configuration read
   back from the devices by the backend (the baseline / live state).
 
 `devices.yaml` is environment-specific and ignored by git. Create it from the
@@ -264,28 +266,28 @@ from the baked-in template on first run if one does not already exist.
 
 | Variable                  | Default | Description                              |
 | ------------------------- | ------- | ---------------------------------------- |
-| `SDNMAN_CONFIG_DIR`        | `config`| Path to YAML config directory            |
-| `SDNMAN_DATA_DIR`          | `data`  | Path to runtime data directory (`desired_config.json`, `current_config.json`, `runtime.db`, `history.jsonl`) |
-| `SDNMAN_USE_MOCK_DEVICES`  | `1`     | `1` mock providers, `0` real SSH drivers |
-| `SDNMAN_POLL_INTERVAL`     | `30`    | Backend poll-cycle interval (seconds)    |
-| `SDNMAN_RETENTION_DAYS`    | `30`    | Drop runtime rows older than N days (`0` disables pruning) |
-| `SDNMAN_BASELINE_ON_START` | `1`     | `1` read each device's live config into `current_config.json` at startup and record it as the history baseline; `0` skip |
-| `SDNMAN_API_BASE_URL`      | `http://127.0.0.1:8081` | Backend URL the web frontend calls |
-| `SDNMAN_API_TOKEN`         | _(unset)_ | Bearer token the backend requires and the frontend sends (empty = no auth) |
-| `SDNMAN_SECRET_KEY`        | `dev-insecure-change-me` | Flask session secret (set in production) |
+| `HSNC_CONFIG_DIR`        | `config`| Path to YAML config directory            |
+| `HSNC_DATA_DIR`          | `data`  | Path to runtime data directory (`desired_config.json`, `current_config.json`, `runtime.db`, `history.jsonl`) |
+| `HSNC_USE_MOCK_DEVICES`  | `1`     | `1` mock providers, `0` real SSH drivers |
+| `HSNC_POLL_INTERVAL`     | `30`    | Backend poll-cycle interval (seconds)    |
+| `HSNC_RETENTION_DAYS`    | `30`    | Drop runtime rows older than N days (`0` disables pruning) |
+| `HSNC_BASELINE_ON_START` | `1`     | `1` read each device's live config into `current_config.json` at startup and record it as the history baseline; `0` skip |
+| `HSNC_API_BASE_URL`      | `http://127.0.0.1:8081` | Backend URL the web frontend calls |
+| `HSNC_API_TOKEN`         | _(unset)_ | Bearer token the backend requires and the frontend sends (empty = no auth) |
+| `HSNC_SECRET_KEY`        | `dev-insecure-change-me` | Flask session secret (set in production) |
 
-#### Real-device SSH (when `SDNMAN_USE_MOCK_DEVICES=0`)
+#### Real-device SSH (when `HSNC_USE_MOCK_DEVICES=0`)
 
 Passwords are resolved only from the environment and are never stored in
 `config/devices.yaml`. Install the optional driver with `pip install '.[ssh]'`.
 
 | Variable                          | Default        | Description                                            |
 | --------------------------------- | -------------- | ----------------------------------------------------- |
-| `SDNMAN_SSH_HOST_OVERRIDE`        | _(unset)_      | Force a host/IP for every device (e.g. `127.0.0.1`)   |
-| `SDNMAN_SSH_ACCEPT_UNKNOWN_HOSTS` | `1`            | `1` auto-accept unknown host keys, `0` reject         |
-| `SDNMAN_OPENWRT_SSH_PASSWORD`     | `openwrt`      | Effective fallback password for OpenWrt devices (the env var itself is unset; `openwrt` is applied when no per-device password is set) |
-| `SDNMAN_JETSTREAM_SSH_PASSWORD`   | `admin`        | Effective fallback password for JetStream switches (the env var itself is unset; `admin` is applied when no per-device password is set) |
-| `SDNMAN_DEVICE_<ID>_PASSWORD`     | _(unset)_      | Per-device password (id upper-cased, non-alnum → `_`); takes precedence over the platform fallback |
+| `HSNC_SSH_HOST_OVERRIDE`        | _(unset)_      | Force a host/IP for every device (e.g. `127.0.0.1`)   |
+| `HSNC_SSH_ACCEPT_UNKNOWN_HOSTS` | `1`            | `1` auto-accept unknown host keys, `0` reject         |
+| `HSNC_OPENWRT_SSH_PASSWORD`     | `openwrt`      | Effective fallback password for OpenWrt devices (the env var itself is unset; `openwrt` is applied when no per-device password is set) |
+| `HSNC_JETSTREAM_SSH_PASSWORD`   | `admin`        | Effective fallback password for JetStream switches (the env var itself is unset; `admin` is applied when no per-device password is set) |
+| `HSNC_DEVICE_<ID>_PASSWORD`     | _(unset)_      | Per-device password (id upper-cased, non-alnum → `_`); takes precedence over the platform fallback |
 
 Per-device host, port and username come from the `connection` block in
 `config/devices.yaml`:
@@ -304,7 +306,7 @@ Per-device host, port and username come from the `connection` block in
 The UI is server-rendered, with **no Node/JavaScript build pipeline** — the browser
 loads exactly what is checked into the repo:
 
-- **Jinja2 templates** (`sdnweb/src/sdnweb/templates/`) render full HTML pages on
+- **Jinja2 templates** (`hsncweb/src/hsncweb/templates/`) render full HTML pages on
   the server. `base.html` is the shared layout (top bar, left sidebar, content
   area); each page does `{% extends "base.html" %}` and fills in the content block.
 - **HTMX** (`static/js/htmx.min.js`) adds the few dynamic bits without hand-written

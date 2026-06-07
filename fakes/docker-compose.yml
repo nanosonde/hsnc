@@ -1,4 +1,4 @@
-# Mock network devices for sdn-manager.
+# Mock network devices for hsnc.
 #
 # Brings up two SSH-accessible device simulators that the real device adapters
 # (OpenWrtSshAdapter / JetStreamCliAdapter) can target:
@@ -14,7 +14,7 @@
 services:
   mock-openwrt:
     build: ./openwrt
-    image: sdnman/mock-openwrt
+    image: hsnc/mock-openwrt
     container_name: mock-openwrt
     hostname: mock-openwrt
     ports:
@@ -32,7 +32,7 @@ services:
 
   mock-jetstream:
     build: ./jetstream
-    image: sdnman/mock-jetstream
+    image: hsnc/mock-jetstream
     container_name: mock-jetstream
     hostname: mock-jetstream
     ports:
@@ -48,7 +48,7 @@ services:
     networks:
       - mocknet
 
-  # Optional: run sdn-manager against the mocks (SDNMAN_USE_MOCK_DEVICES=0) so the
+  # Optional: run hsnc against the mocks (HSNC_USE_MOCK_DEVICES=0) so the
   # real SSH adapters drive the simulators over the network instead of using the
   # in-process mock adapter. Enable with:  --profile controller
   controller:
@@ -56,14 +56,14 @@ services:
     build:
       context: ..
       dockerfile: Dockerfile
-    image: sdnman/controller
-    container_name: sdnman-controller
+    image: hsnc/controller
+    container_name: hsnc-controller
     depends_on:
       - mock-openwrt
       - mock-jetstream
     environment:
-      SDNMAN_SECRET_KEY: dev-secret-change-me
-      SDNMAN_USE_MOCK_DEVICES: "0"
+      HSNC_SECRET_KEY: dev-secret-change-me
+      HSNC_USE_MOCK_DEVICES: "0"
     ports:
       - "8080:8080"
     networks:

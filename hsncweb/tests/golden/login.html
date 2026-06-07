@@ -1,0 +1,40 @@
+<!DOCTYPE html>
+
+<html lang="en">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>Login · hsnc</title>
+  <link rel="stylesheet" href="/static/css/app.css" />
+  <script src="/static/js/htmx.min.js" defer></script>
+</head>
+<body>
+
+
+  
+<div class="login-wrap">
+  <div class="card login-card">
+    <h1><span style="color:var(--accent);font-weight:800">H</span> hsnc</h1>
+    <p class="sub">Sign in to the network controller</p>
+    
+      
+    
+    <form method="post" action="/login">
+      <div class="field">
+        <label for="username">Username</label>
+        <input id="username" name="username" autocomplete="username"
+               value="" required autofocus />
+      </div>
+      <div class="field">
+        <label for="password">Password</label>
+        <input id="password" name="password" type="password"
+               autocomplete="current-password" required />
+      </div>
+      <button class="btn btn-primary" type="submit" style="width:100%">Sign In</button>
+    </form>
+  </div>
+</div>
+
+
+</body>
+</html>
