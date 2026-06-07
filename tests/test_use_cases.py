@@ -89,48 +89,7 @@ def test_list_clients_search(config, monitoring):
     assert paged.rows[0].name == "client-3"
 
 
-def test_network_caches_live_scrapes_within_ttl(config):
-    from sdnman.domain.interfaces import MonitoringProvider, MonitoringProviderFactory
-
-    class _CountingProvider(MonitoringProvider):
-        def __init__(self) -> None:
-            self.status_calls = 0
-            self.client_calls = 0
-
-        def fetch_status(self, device):
-            self.status_calls += 1
-            return device
-
-        def fetch_clients(self, device):
-            self.client_calls += 1
-            return []
-
-    class _Factory(MonitoringProviderFactory):
-        def __init__(self, provider):
-            self._provider = provider
-
-        def for_device(self, device):
-            return self._provider
-
-    provider = _CountingProvider()
-    now = {"t": 1000.0}
-    network = NetworkStateService(
-        config, _Factory(provider), cache_ttl_seconds=30.0, clock=lambda: now["t"]
-    )
-    device_count = len(config.list_devices())
-
-    # Two sweeps within the TTL only scrape each device once.
-    network.devices()
-    network.devices()
-    assert provider.status_calls == device_count
-
-    # After the TTL expires, the next sweep re-scrapes.
-    now["t"] += 31.0
-    network.devices()
-    assert provider.status_calls == device_count * 2
-
-
-def test_network_without_ttl_always_scrapes(config):
+def test_network_scrapes_every_sweep(config):
     from sdnman.domain.interfaces import MonitoringProvider, MonitoringProviderFactory
 
     class _CountingProvider(MonitoringProvider):
@@ -152,7 +111,7 @@ def test_network_without_ttl_always_scrapes(config):
             return self._provider
 
     provider = _CountingProvider()
-    network = NetworkStateService(config, _Factory(provider))  # default TTL=0
+    network = NetworkStateService(config, _Factory(provider))
     device_count = len(config.list_devices())
 
     network.devices()

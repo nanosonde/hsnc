@@ -135,18 +135,17 @@ class Container:
         # application services. The poll loop records live state; read use cases
         # read the latest snapshot (local SQLite, no separate cache needed).
         self.network = NetworkStateService(self.config, self.monitoring)
-        self.network_cached = self.network
         self.poll_network = NetworkStateService(self.config, poll_monitoring)
 
         # use cases
         self.authenticate_user = AuthenticateUser(self.config, verify_password)
         self.get_dashboard_summary = GetDashboardSummary(
-            self.config, self.network_cached, self.runtime
+            self.config, self.network, self.runtime
         )
-        self.list_devices = ListDevices(self.network_cached)
-        self.get_device_detail = GetDeviceDetail(self.network_cached)
-        self.list_clients = ListClients(self.network_cached)
-        self.get_topology = GetTopology(self.network_cached, self.topology_provider)
+        self.list_devices = ListDevices(self.network)
+        self.get_device_detail = GetDeviceDetail(self.network)
+        self.list_clients = ListClients(self.network)
+        self.get_topology = GetTopology(self.network, self.topology_provider)
         self.poll_device_state = PollDeviceState(
             self.poll_network, self.runtime, retention_days=settings.retention_days
         )
