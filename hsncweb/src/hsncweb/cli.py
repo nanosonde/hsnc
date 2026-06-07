@@ -5,6 +5,7 @@ from __future__ import annotations
 import click
 
 from .app import create_app
+from .logging_config import configure_logging
 
 
 @click.group()
@@ -19,6 +20,7 @@ def main() -> None:
 def serve(host: str, port: int, debug: bool) -> None:
     """Run the development server (use gunicorn in production)."""
 
+    configure_logging()
     app = create_app()
     app.run(host=host, port=port, debug=debug)
 

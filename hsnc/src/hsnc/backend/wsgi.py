@@ -9,8 +9,11 @@ from __future__ import annotations
 
 import atexit
 
+from ..logging_config import configure_logging
 from .app import create_api_app
 from .runtime import BackendRuntime
+
+configure_logging()
 
 app = create_api_app()
 

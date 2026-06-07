@@ -272,6 +272,7 @@ from the baked-in template on first run if one does not already exist.
 | `HSNC_POLL_INTERVAL`     | `30`    | Backend poll-cycle interval (seconds)    |
 | `HSNC_RETENTION_DAYS`    | `30`    | Drop runtime rows older than N days (`0` disables pruning) |
 | `HSNC_BASELINE_ON_START` | `1`     | `1` read each device's live config into `current_config.json` at startup and record it as the history baseline; `0` skip |
+| `HSNC_LOG_LEVEL`         | `info`  | Application log verbosity: `debug`, `info`, `warning`, `error`, `critical` (case-insensitive; unknown values fall back to `info`) |
 | `HSNC_API_BASE_URL`      | `http://127.0.0.1:8081` | Backend URL the web frontend calls |
 | `HSNC_API_TOKEN`         | _(unset)_ | Bearer token the backend requires and the frontend sends (empty = no auth) |
 | `HSNC_SECRET_KEY`        | `dev-insecure-change-me` | Flask session secret (set in production) |

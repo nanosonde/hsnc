@@ -9,6 +9,7 @@ from pathlib import Path
 import click
 
 from ..container import Container
+from ..logging_config import configure_logging
 from .settings import settings_from_env
 
 _log = logging.getLogger("hsnc.backend.cli")
@@ -29,7 +30,7 @@ def api(host: str, port: int) -> None:
     (when enabled) and runs the poll loop, then serves the /api surface.
     """
 
-    logging.basicConfig(level=logging.INFO, format="%(asctime)s %(levelname)s %(message)s")
+    configure_logging()
     from .app import create_api_app
     from .runtime import BackendRuntime
 
@@ -47,7 +48,7 @@ def api(host: str, port: int) -> None:
 def poll() -> None:
     """Run a single device poll sweep and exit (one-shot)."""
 
-    logging.basicConfig(level=logging.INFO, format="%(asctime)s %(levelname)s %(message)s")
+    configure_logging()
     container = Container(settings_from_env())
     try:
         count = container.poll_device_state.execute()
