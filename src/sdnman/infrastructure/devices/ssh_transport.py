@@ -258,12 +258,12 @@ def default_runner_factory(target: SshTarget) -> SshCommandRunner:
 
 
 class PersistentSshRunner(ParamikoSshRunner):
-    """Long-lived, thread-safe SSH runner for the Device Broker.
+    """Long-lived, thread-safe SSH runner for a pooled device connection.
 
     Unlike :class:`ParamikoSshRunner` (which connects per use and closes on
     ``__exit__``), this keeps a single SSH connection open across calls and
     transparently reconnects after a dropped connection. A lock serialises
-    access so the broker's keepalive thread and on-demand command calls never
+    access so the pool's keepalive thread and on-demand command calls never
     use the channel concurrently.
 
     The context-manager protocol is a no-op on exit so adapters written as
@@ -278,7 +278,7 @@ class PersistentSshRunner(ParamikoSshRunner):
         return self
 
     def __exit__(self, *exc_info: object) -> None:
-        # Keep the connection open; the broker owns its lifecycle.
+        # Keep the connection open; the pool owns its lifecycle.
         return None
 
     def ensure_connected(self) -> None:
@@ -329,7 +329,7 @@ class PersistentRunnerRegistry:
     """Caches one :class:`PersistentSshRunner` per resolved target.
 
     Used as a :data:`RunnerFactory` so device adapters transparently reuse the
-    broker's warm connections. Keyed by the connection tuple so repeated
+    pool's warm connections. Keyed by the connection tuple so repeated
     resolutions of the same device share a single connection.
     """
 

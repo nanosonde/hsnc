@@ -43,7 +43,7 @@ class FlaskTestTransport:
 
 def backend_api_client(settings: Settings) -> tuple[ApiClient, Container]:
     """Return an ApiClient wired to a freshly-polled mock backend container."""
-    container = Container(settings, profile="api")
+    container = Container(settings)
     # Seed the runtime snapshot the way the poll loop would on a live system.
     container.poll_device_state.execute()
     app = create_api_app(settings, container=container)

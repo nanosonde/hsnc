@@ -1,26 +1,16 @@
-"""Tests for the Device Broker: IPC server/client, proxy adapter, pool, baseline."""
+"""Tests for the connection pool, runtime-store monitoring and baseline read."""
 
 from __future__ import annotations
 
-import threading
 import time
 from dataclasses import replace
-
-import pytest
 
 from sdnman.application.use_cases.baseline import ReadBaseline
 from sdnman.domain.entities import Client, Device, SwitchPort, Vlan
 from sdnman.domain.enums import ConnectionType, DeviceKind, DeviceStatus, PortMode
 from sdnman.domain.interfaces import DeviceAdapter, DeviceAdapterFactory
 from sdnman.domain.value_objects import IpAddress, MacAddress
-from sdnman.infrastructure.broker.client import (
-    BrokerClient,
-    BrokerRequestError,
-    BrokerUnavailableError,
-)
-from sdnman.infrastructure.broker.connection_pool import ConnectionPool
-from sdnman.infrastructure.broker.proxy_adapter import BrokerProxyAdapterFactory
-from sdnman.infrastructure.broker.server import BrokerApi, serve
+from sdnman.infrastructure.devices.connection_pool import ConnectionPool
 from sdnman.infrastructure.devices.runtime_monitoring import (
     RuntimeStoreMonitoringProvider,
 )
@@ -66,68 +56,6 @@ class _Factory(DeviceAdapterFactory):
 
     def for_device(self, device: Device) -> DeviceAdapter:
         return self._adapter
-
-
-@pytest.fixture
-def broker_server(tmp_path, site, users):
-    """A running broker IPC server over a real Unix socket."""
-    device = _switch()
-    read = replace(device, model="JetStream X", firmware="9.9", ssids=[])
-    adapter = _RecordingAdapter(read)
-    repo = FakeConfigRepository(site, users, [device])
-    api = BrokerApi(repo, _Factory(adapter))
-    socket_path = tmp_path / "broker.sock"
-    server = serve(socket_path, api)
-    thread = threading.Thread(target=server.serve_forever, daemon=True)
-    thread.start()
-    try:
-        yield socket_path, adapter, read
-    finally:
-        server.shutdown()
-        server.server_close()
-
-
-def test_broker_health(broker_server):
-    socket_path, _adapter, _read = broker_server
-    client = BrokerClient(socket_path)
-    assert client.health()["status"] == "ok"
-
-
-def test_broker_read_config(broker_server):
-    socket_path, _adapter, read = broker_server
-    client = BrokerClient(socket_path)
-    payload = client.read_config("switch-1")
-    assert payload["model"] == "JetStream X"
-    assert payload["vlans"][0]["vlan_id"] == 10
-
-
-def test_broker_read_unknown_device(broker_server):
-    socket_path, _adapter, _read = broker_server
-    client = BrokerClient(socket_path)
-    with pytest.raises(BrokerRequestError) as exc:
-        client.read_config("nope")
-    assert exc.value.status == 404
-
-
-def test_proxy_adapter_fetch_and_push(broker_server):
-    socket_path, adapter, _read = broker_server
-    factory = BrokerProxyAdapterFactory(BrokerClient(socket_path))
-    device = _switch()
-
-    proxy = factory.for_device(device)
-    fetched = proxy.fetch_config(device)
-    assert fetched.model == "JetStream X"
-    assert fetched.vlans[0].vlan_id == 10
-
-    proxy.push_config(replace(device, ssids=["Corp"]))
-    assert adapter.pushed, "broker should have received the push"
-    assert adapter.pushed[0].id == "switch-1"
-
-
-def test_broker_client_unavailable(tmp_path):
-    client = BrokerClient(tmp_path / "missing.sock", timeout=0.5)
-    with pytest.raises(BrokerUnavailableError):
-        client.health()
 
 
 # -- connection pool -----------------------------------------------------

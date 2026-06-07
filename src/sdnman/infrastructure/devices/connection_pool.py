@@ -1,4 +1,4 @@
-"""The Device Broker's connection pool.
+"""The device connection pool.
 
 Keeps one persistent primary (SSH) connection open to every configured device
 **at all times**, each supervised by its own thread so a fault on one device
@@ -7,9 +7,8 @@ reconnects, using exponential backoff. This is what lets the web app stay fast:
 connections live here, warm and ready, instead of being opened inside a request.
 
 The pool does not execute device commands itself — adapters do, reusing the warm
-runners via the :class:`~..devices.ssh_transport.PersistentRunnerRegistry`. The
-pool's job is purely to *establish and maintain* the connections and report
-their health.
+runners via the :class:`~.ssh_transport.PersistentRunnerRegistry`. The pool's job
+is purely to *establish and maintain* the connections and report their health.
 """
 
 from __future__ import annotations
@@ -23,7 +22,7 @@ from typing import Protocol
 
 from ...domain.entities import Device
 
-_log = logging.getLogger("sdnman.broker.pool")
+_log = logging.getLogger("sdnman.devices.pool")
 
 
 class SupervisedRunner(Protocol):

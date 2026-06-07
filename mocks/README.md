@@ -53,19 +53,19 @@ The adapters need the optional SSH driver (`pip install '.[ssh]'`). Per-device h
 port and username come from a `connection:` block in `config/devices.yaml`; passwords
 are resolved only from the environment (`SDNMAN_OPENWRT_SSH_PASSWORD`,
 `SDNMAN_JETSTREAM_SSH_PASSWORD`, or `SDNMAN_DEVICE_<ID>_PASSWORD`). The SSH adapters
-run inside the **Device Broker** (the web app only proxies to it), so drive the mocks
-through the broker:
+run inside the **REST backend** (the web app only talks to it over HTTP), so drive the
+mocks through the backend:
 
 ```sh
 SDNMAN_USE_MOCK_DEVICES=0 \
 SDNMAN_SSH_HOST_OVERRIDE=127.0.0.1 \
 SDNMAN_OPENWRT_SSH_PASSWORD=openwrt \
 SDNMAN_JETSTREAM_SSH_PASSWORD=admin \
-  sdnman-ctl broker   # set connection.port 2201/2202 per device, or override per run
+  sdnman-ctl api   # set connection.port 2201/2202 per device, or override per run
 ```
 
-Then, in another shell, run `sdnman-ctl baseline` to read the live config or
-`sdnman-ctl serve` to use the UI against the broker.
+The backend reads the live baseline on start and polls the devices; run
+`sdnman-ctl serve` in another shell to use the UI against it.
 
 ## Mapping to the sample inventory (`config/devices.yaml`)
 

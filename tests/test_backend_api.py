@@ -27,7 +27,7 @@ def container(tmp_path):
         use_mock_devices=True,
         baseline_on_start=False,
     )
-    c = Container(settings, profile="api")
+    c = Container(settings)
     # Seed the runtime snapshot the way the poll loop would on a live system.
     c.poll_device_state.execute()
     try:

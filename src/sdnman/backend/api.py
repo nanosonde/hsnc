@@ -1,7 +1,7 @@
 """REST API blueprint: the single HTTP surface the frontend calls.
 
 Every route is thin: parse the request, call the matching application use case on
-the broker-grade container, and serialize the result with :func:`to_jsonable`.
+the container's use cases, and serialize the result with :func:`to_jsonable`.
 Raised use-case exceptions are turned into a stable error envelope by the app's
 error handler (see :mod:`sdnman.backend.app`), so the frontend can re-raise the
 same-named exception and flash identical text.

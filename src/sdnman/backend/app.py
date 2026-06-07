@@ -18,7 +18,7 @@ from flask import Flask, jsonify, request
 from werkzeug.exceptions import HTTPException
 
 from ..application.wire import error_envelope, status_for_exception
-from ..infrastructure.container import PROFILE_API, Container, Settings
+from ..infrastructure.container import Container, Settings
 from ..presentation.settings import settings_from_env
 from .api import bp as api_bp
 
@@ -28,7 +28,7 @@ def create_api_app(settings: Settings | None = None, container: Container | None
 
     app = Flask(__name__)
     app.config["SETTINGS"] = settings
-    app.config["CONTAINER"] = container or Container(settings, profile=PROFILE_API)
+    app.config["CONTAINER"] = container or Container(settings)
 
     token = os.environ.get("SDNMAN_API_TOKEN", "").strip()
     if token:

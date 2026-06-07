@@ -57,7 +57,7 @@ case "${MOCK}" in
 esac
 
 # A freshly mounted named volume is root-owned; hand it to the runtime user so
-# both the web and broker services (which drop privileges) can read and write it.
+# both the web and api services (which drop privileges) can read and write it.
 # stderr is silenced because a read-only bind-mounted devices.yaml cannot be
 # chowned and that warning is expected, not an error.
 chown -R appuser:appuser "${SDNMAN_DATA_DIR}" 2>/dev/null || true

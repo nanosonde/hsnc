@@ -14,8 +14,8 @@ from __future__ import annotations
 import logging
 import threading
 
-from ..infrastructure.broker.connection_pool import ConnectionPool
 from ..infrastructure.container import Container
+from ..infrastructure.devices.connection_pool import ConnectionPool
 
 _log = logging.getLogger("sdnman.backend")
 

@@ -4,7 +4,7 @@ Stores time-series runtime data: device status snapshots, client sessions and
 association-failure counts. A tiny ``schema_version`` table drives forward-only
 migrations applied automatically at startup. Apply/audit history lives elsewhere
 (:class:`JsonlApplyHistoryStore`), so this database has a single writer (the
-Device Broker) and can be pruned on a retention window.
+the poll loop) and can be pruned on a retention window.
 """
 
 from __future__ import annotations
@@ -63,7 +63,7 @@ class SqliteRuntimeStore(RuntimeStore):
 
             if current >= SCHEMA_VERSION:
                 # Already current: do not write, so read-only consumers (the web
-                # process) never contend with the broker for the write lock.
+                # process) never contend with the poll loop for the write lock.
                 return
 
             if current < 1:

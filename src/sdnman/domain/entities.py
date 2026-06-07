@@ -98,7 +98,7 @@ class MonitoringConfig:
     """Optional secondary live-data source for a device.
 
     The configuration plane is always SSH. This describes an *additional*
-    runtime/telemetry channel the Device Broker may open alongside the SSH
+    runtime/telemetry channel the poll loop may open alongside the SSH
     connection (e.g. an SNMPv3 agent or a Prometheus exporter over HTTP(S)).
     ``type == "ssh"`` means runtime data is scraped over the same SSH plane;
     ``type == "none"`` disables live data for the device.

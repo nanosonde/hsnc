@@ -2,7 +2,7 @@
 
 This is the web app's monitoring source. The web process must never open a
 device connection in a request, so instead of scraping live it reads the most
-recent snapshot the Device Broker recorded into the runtime database. Pages
+recent snapshot the poll loop recorded into the runtime database. Pages
 therefore render from local SQLite and never block on SSH connects or timeouts.
 """
 

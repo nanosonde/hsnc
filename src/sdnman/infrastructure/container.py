@@ -31,8 +31,6 @@ from ..application.use_cases.list_devices import GetDeviceDetail, ListDevices
 from ..application.use_cases.poll_device_state import PollDeviceState
 from ..application.use_cases.revert_config import RevertPendingChanges
 from ..application.use_cases.sync_device_config import SyncDeviceConfig
-from .broker.client import BrokerClient
-from .broker.proxy_adapter import BrokerProxyAdapterFactory
 from .config.applied_config_store import CurrentConfigStore
 from .config.device_config_store import JsonDeviceConfigStore
 from .config.layered_config_repository import LayeredConfigRepository
@@ -51,16 +49,6 @@ from .persistence.jsonl_apply_history_store import JsonlApplyHistoryStore
 from .persistence.sqlite_runtime_store import SqliteRuntimeStore
 from .security import verify_password
 
-#: Composition profiles. ``web`` wires the read-only/proxy stack used by the
-#: Flask app (no device connections); ``broker`` wires the real device stack
-#: used by the always-on Device Broker process.
-PROFILE_WEB = "web"
-PROFILE_BROKER = "broker"
-#: The unified REST backend: real device adapters for configuration I/O, a live
-#: poll loop that scrapes into the runtime store, and read endpoints that serve
-#: the latest snapshot (no per-request device I/O).
-PROFILE_API = "api"
-
 
 @dataclass
 class Settings:
@@ -72,7 +60,6 @@ class Settings:
     poll_interval_seconds: int = 30
     retention_days: int = 30
     baseline_on_start: bool = True
-    broker_socket: Path = Path("/data/broker.sock")
     api_base_url: str = "http://127.0.0.1:8081"
     api_token: str = ""
     ssh: SshConnectionSettings = field(default_factory=SshConnectionSettings)
@@ -101,22 +88,14 @@ class Settings:
 class Container:
     """Holds singletons and exposes constructed use cases.
 
-    The ``profile`` selects how the device-facing ports are wired:
-
-    * ``web`` — the Flask process. Device adapters proxy to the broker over the
-      Unix socket and monitoring reads the latest snapshot from the runtime
-      store, so **no request ever opens a device connection**.
-    * ``broker`` — the Device Broker process. Real SSH adapters reuse persistent,
-      pooled connections and monitoring scrapes the devices, writing the runtime
-      store. The broker owns all device I/O.
-
-    Inner layers (use cases, DTOs, templates) are identical across profiles;
-    only the infrastructure bound to the ports differs.
+    Real SSH adapters perform configuration I/O (apply/sync/baseline) and a
+    background poll loop scrapes live monitoring into the runtime store. Read
+    use cases serve the latest snapshot from that store, so a read request never
+    opens a device connection.
     """
 
-    def __init__(self, settings: Settings, profile: str = PROFILE_WEB) -> None:
+    def __init__(self, settings: Settings) -> None:
         self.settings = settings
-        self.profile = profile
 
         # configuration: connection profiles (devices.yaml) + config payloads
         # (desired_config.json edited by the UI, current_config.json = baseline).
@@ -136,33 +115,22 @@ class Container:
             settings.data_dir, self.profiles, store=self.current_store
         )
 
-        # connection-plane + monitoring-plane wiring differs per profile.
-        self.runner_registry: PersistentRunnerRegistry | None = None
-        self.ssh_resolver: SshConnectionResolver | None = None
-        if profile in (PROFILE_BROKER, PROFILE_API):
-            self.ssh_resolver = SshConnectionResolver(settings.ssh)
-            self.runner_registry = PersistentRunnerRegistry()
-            self.adapters = DefaultDeviceAdapterFactory(
-                use_mock=settings.use_mock_devices,
-                resolver=self.ssh_resolver,
-                runner_factory=self.runner_registry.get,
-            )
-            live_monitoring = DefaultMonitoringProviderFactory(
-                use_mock=settings.use_mock_devices,
-                resolver=self.ssh_resolver,
-                runner_factory=self.runner_registry.get,
-            )
-            poll_monitoring = live_monitoring
-            if profile == PROFILE_API:
-                # Read endpoints serve the latest runtime snapshot; the poll
-                # loop keeps it fresh by scraping live monitoring.
-                self.monitoring = RuntimeStoreMonitoringFactory(self.runtime)
-            else:  # PROFILE_BROKER scrapes live on demand (it serves no reads)
-                self.monitoring = live_monitoring
-        else:  # PROFILE_WEB proxies device I/O to the broker; reads the snapshot
-            self.adapters = BrokerProxyAdapterFactory(BrokerClient(settings.broker_socket))
-            self.monitoring = RuntimeStoreMonitoringFactory(self.runtime)
-            poll_monitoring = self.monitoring
+        # connection-plane + monitoring-plane wiring. Real SSH adapters own all
+        # device I/O; read endpoints serve the latest runtime snapshot, kept
+        # fresh by the poll loop scraping live monitoring.
+        self.ssh_resolver = SshConnectionResolver(settings.ssh)
+        self.runner_registry = PersistentRunnerRegistry()
+        self.adapters = DefaultDeviceAdapterFactory(
+            use_mock=settings.use_mock_devices,
+            resolver=self.ssh_resolver,
+            runner_factory=self.runner_registry.get,
+        )
+        poll_monitoring = DefaultMonitoringProviderFactory(
+            use_mock=settings.use_mock_devices,
+            resolver=self.ssh_resolver,
+            runner_factory=self.runner_registry.get,
+        )
+        self.monitoring = RuntimeStoreMonitoringFactory(self.runtime)
 
         # application services. The poll loop records live state; read use cases
         # read the latest snapshot (local SQLite, no separate cache needed).
@@ -230,6 +198,5 @@ class Container:
     def close(self) -> None:
         self.runtime.close()
         self.history.close()
-        if self.runner_registry is not None:
-            self.runner_registry.close_all()
+        self.runner_registry.close_all()
 
