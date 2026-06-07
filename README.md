@@ -277,6 +277,64 @@ from the baked-in template on first run if one does not already exist.
 | `HSNC_API_TOKEN`         | _(unset)_ | Bearer token the backend requires and the frontend sends (empty = no auth) |
 | `HSNC_SECRET_KEY`        | `dev-insecure-change-me` | Flask session secret (set in production) |
 
+### Logging
+
+Three independent controls govern what ends up in the logs (`make logs`, i.e. the
+container's stdout/stderr). They compose freely and can be combined.
+
+1. **`HSNC_LOG_LEVEL`** — the verbosity of the application's *own* loggers
+   (`hsnc.*` in the backend, `hsncweb` in the frontend). Accepts `debug`, `info`,
+   `warning`, `error`, `critical` (case-insensitive; unknown values fall back to
+   `info`). This is the normal knob for everyday logging and applies to **both**
+   services. Third-party libraries (Werkzeug, urllib3, paramiko) are left at their
+   own defaults so raising this to `debug` does not drown you in library noise.
+
+2. **`HSNC_SSH_TRANSCRIPT_DEBUG`** (+ per-device) — mirrors the full SSH
+   *transcript* to the logs: every command the controller sends, the output each
+   device returns, and connection lifecycle notes. This is the same content as the
+   per-device **View SSH connection** popup in the web UI, streamed to the log on a
+   dedicated `hsnc.ssh.transcript` logger. It is **independent of
+   `HSNC_LOG_LEVEL`** — enabled transcript lines appear even when `HSNC_LOG_LEVEL`
+   is `error`.
+
+3. **`HSNC_SSH_DEBUG`** (+ per-device) — turns on paramiko's *own* SSH
+   transport/wire-level `DEBUG` logging (key exchange, channel management,
+   keepalives, etc.). Also independent of `HSNC_LOG_LEVEL`.
+   - With the **global** flag on, paramiko logs at `DEBUG` for **every** device,
+     including the connection **handshake**.
+   - With only a **per-device** flag on (global off), that device's
+     **post-handshake** transport activity is logged on its own
+     `paramiko.transport.<id>` channel; the handshake itself is captured **only**
+     when the global flag is enabled.
+
+**Per-device overrides.** Both SSH-debug flags support a per-device form,
+`HSNC_DEVICE_<ID>_SSH_TRANSCRIPT_DEBUG` and `HSNC_DEVICE_<ID>_SSH_DEBUG`, where
+`<ID>` is the device id upper-cased with non-alphanumeric characters replaced by
+`_` (e.g. `gateway-1` → `HSNC_DEVICE_GATEWAY_1_SSH_DEBUG`). An explicit per-device
+value **overrides the global default in either direction** — it can force
+debugging *off* for one noisy device while a global flag is on, or *on* for a
+single device while the global default is off. All flags accept `1`/`true`/`yes`/
+`on` as truthy (case-insensitive); anything else is false.
+
+Example `.env` for maximum debugging of a single device:
+
+```bash
+HSNC_LOG_LEVEL=info                              # leave the rest of the app calm
+HSNC_DEVICE_GATEWAY_1_SSH_TRANSCRIPT_DEBUG=1     # mirror its SSH transcript
+HSNC_DEVICE_GATEWAY_1_SSH_DEBUG=1                # + paramiko post-handshake detail
+HSNC_SSH_DEBUG=1                                 # (optional) also capture handshakes
+```
+
+> **Security warning.** The SSH transcript and paramiko debug logs can contain
+> sensitive data — Wi-Fi pre-shared keys, device passwords typed into a CLI,
+> key-exchange details — written in clear text to the container logs. Enable them
+> only while actively diagnosing, prefer the per-device flags, and turn them off
+> afterwards.
+>
+> Devices that share the same host, port and username share a single warm
+> connection (and therefore one transcript and one paramiko channel); the first
+> device resolved wins the debug flags for that shared connection.
+
 #### Real-device SSH (when `HSNC_USE_MOCK_DEVICES=0`)
 
 Passwords are resolved only from the environment and are never stored in
@@ -289,6 +347,10 @@ Passwords are resolved only from the environment and are never stored in
 | `HSNC_OPENWRT_SSH_PASSWORD`     | `openwrt`      | Effective fallback password for OpenWrt devices (the env var itself is unset; `openwrt` is applied when no per-device password is set) |
 | `HSNC_JETSTREAM_SSH_PASSWORD`   | `admin`        | Effective fallback password for JetStream switches (the env var itself is unset; `admin` is applied when no per-device password is set) |
 | `HSNC_DEVICE_<ID>_PASSWORD`     | _(unset)_      | Per-device password (id upper-cased, non-alnum → `_`); takes precedence over the platform fallback |
+| `HSNC_SSH_DEBUG`                | `0`            | Global paramiko transport `DEBUG` logging (handshake + all devices). See [Logging](#logging) |
+| `HSNC_DEVICE_<ID>_SSH_DEBUG`    | _(unset)_      | Per-device paramiko transport `DEBUG` (post-handshake); overrides the global flag either direction |
+| `HSNC_SSH_TRANSCRIPT_DEBUG`     | `0`            | Global: mirror the full SSH transcript (commands + output) to the log; independent of `HSNC_LOG_LEVEL` |
+| `HSNC_DEVICE_<ID>_SSH_TRANSCRIPT_DEBUG` | _(unset)_ | Per-device transcript mirroring; overrides the global flag either direction |
 
 Per-device host, port and username come from the `connection` block in
 `config/devices.yaml`:

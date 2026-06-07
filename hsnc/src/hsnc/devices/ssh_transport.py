@@ -47,14 +47,43 @@ _PAGER_RE = re.compile(r"Press any key to continue|--More--", re.IGNORECASE)
 # instead of guessing from an idle timeout, which races on slow switches.
 _PROMPT_RE = re.compile(r"\S+[>#][ \t]*\Z")
 
-# Paramiko's background transport thread logs unactionable tracebacks at ERROR
-# when a device is unreachable or drops the connection (e.g. "Error reading SSH
-# protocol banner", auth failures). We normalise every connection fault into a
-# clean :class:`SshError` and already surface a readable WARNING ourselves, so we
-# raise the threshold to keep that internal chatter out of the application log.
-# Set HSNC_SSH_DEBUG=1 to restore paramiko's own logging while diagnosing.
-if not os.environ.get("HSNC_SSH_DEBUG"):
-    logging.getLogger("paramiko").setLevel(logging.CRITICAL)
+# Dedicated logger for the optional SSH transcript mirror (see HSNC_SSH_TRANSCRIPT_
+# DEBUG). It is pinned to DEBUG and stays independent of HSNC_LOG_LEVEL: lines are
+# only emitted when a transcript is explicitly debug-enabled, so pinning is
+# harmless when the feature is off, and enabled lines surface even when the rest of
+# the app is logging at a higher threshold.
+_TRANSCRIPT_LOG = logging.getLogger("hsnc.ssh.transcript")
+_TRANSCRIPT_LOG.setLevel(logging.DEBUG)
+
+# Per-device paramiko transport logs are re-pointed onto child channels named
+# "paramiko.transport.<normalised-id>" so a single device can be debugged in
+# isolation (see HSNC_DEVICE_<ID>_SSH_DEBUG).
+_PARAMIKO_CHANNEL_PREFIX = "paramiko.transport."
+
+# Paramiko's background transport thread logs unactionable tracebacks at ERROR when
+# a device is unreachable or drops the connection (e.g. "Error reading SSH protocol
+# banner", auth failures). We normalise every connection fault into a clean
+# :class:`SshError` and already surface a readable WARNING ourselves, so by default
+# we silence paramiko's own logger. The global HSNC_SSH_DEBUG flag raises it back to
+# DEBUG (see :func:`apply_paramiko_global_debug`), which is also what captures the
+# connection handshake; per-device debugging instead uses the child channels above.
+logging.getLogger("paramiko").setLevel(logging.CRITICAL)
+
+
+def apply_paramiko_global_debug(enabled: bool) -> None:
+    """Set the base ``paramiko`` logger level from the global debug flag.
+
+    When ``enabled`` (global ``HSNC_SSH_DEBUG``), paramiko logs at ``DEBUG`` —
+    including the connection handshake and every device's transport activity.
+    When disabled it is silenced at ``CRITICAL``; per-device debugging then relies
+    on the post-handshake child channels and does not capture the handshake.
+    """
+    logging.getLogger("paramiko").setLevel(logging.DEBUG if enabled else logging.CRITICAL)
+
+
+def _env_flag(value: str | None) -> bool:
+    """Parse a boolean-ish env value. Truthy: ``1``, ``true``, ``yes``, ``on``."""
+    return (value or "").strip().lower() in ("1", "true", "yes", "on")
 
 
 @dataclass(frozen=True)
@@ -74,12 +103,18 @@ class SshTranscript:
     """Thread-safe, bounded ring buffer of recent SSH activity for one runner.
 
     Output is split into individual lines so the frontend can render a terminal
-    view; the buffer keeps at most ``maxlen`` lines (oldest dropped first).
+    view; the buffer keeps at most ``maxlen`` lines (oldest dropped first). When
+    ``debug`` is set, every recorded line is also mirrored to the
+    ``hsnc.ssh.transcript`` logger at DEBUG, tagged with ``label``.
     """
 
-    def __init__(self, maxlen: int = SSH_LOG_MAX_LINES) -> None:
+    def __init__(
+        self, maxlen: int = SSH_LOG_MAX_LINES, *, debug: bool = False, label: str = ""
+    ) -> None:
         self._entries: deque[TranscriptEntry] = deque(maxlen=maxlen)
         self._lock = threading.Lock()
+        self._debug = debug
+        self._label = label
 
     def record(self, kind: str, text: str) -> None:
         if not text:
@@ -88,6 +123,8 @@ class SshTranscript:
         with self._lock:
             for line in text.splitlines():
                 self._entries.append(TranscriptEntry(now, kind, line))
+                if self._debug:
+                    _TRANSCRIPT_LOG.debug("[%s] %s | %s", self._label, kind, line)
 
     def lines(self, limit: int | None = None) -> list[TranscriptEntry]:
         with self._lock:
@@ -111,6 +148,12 @@ class SshTarget:
     password: str
     accept_unknown_hosts: bool = True
     timeout: float = 10.0
+    # Debug toggles resolved per device (see HSNC_SSH_TRANSCRIPT_DEBUG /
+    # HSNC_SSH_DEBUG and their per-device variants). ``label`` identifies the
+    # device in transcript log lines and the per-device paramiko channel.
+    debug_transcript: bool = False
+    debug_paramiko: bool = False
+    label: str = ""
 
 
 class SshCommandRunner(ABC):
@@ -135,7 +178,9 @@ class ParamikoSshRunner(SshCommandRunner):
     def __init__(self, target: SshTarget) -> None:
         self._target = target
         self._client = None  # lazily connected paramiko.SSHClient
-        self._transcript = SshTranscript()
+        self._transcript = SshTranscript(
+            debug=target.debug_transcript, label=target.label or target.host
+        )
 
     @property
     def transcript(self) -> SshTranscript:
@@ -188,8 +233,28 @@ class ParamikoSshRunner(SshCommandRunner):
             f"connected to {self._target.host}:{self._target.port} "
             f"as {self._target.username}",
         )
+        self._apply_paramiko_channel(client)
         self._client = client
         return client
+
+    def _apply_paramiko_channel(self, client) -> None:
+        """Route this device's transport logs onto its own paramiko channel.
+
+        Applied after the handshake (the high-level ``connect`` performs it
+        internally), so the channel captures post-handshake activity — channel
+        opens, command exec, keepalives and disconnects. When the device opted in
+        via ``HSNC_DEVICE_<ID>_SSH_DEBUG`` the channel is raised to DEBUG; handshake
+        logs are only captured separately by the global ``HSNC_SSH_DEBUG`` flag.
+        """
+        transport = client.get_transport()
+        if transport is None:
+            return
+        channel = _PARAMIKO_CHANNEL_PREFIX + _normalise_id(
+            self._target.label or self._target.host
+        )
+        transport.set_log_channel(channel)
+        if self._target.debug_paramiko:
+            logging.getLogger(channel).setLevel(logging.DEBUG)
 
     def close(self) -> None:
         if self._client is not None:
@@ -464,6 +529,12 @@ class SshConnectionSettings:
     openwrt_password: str = ""
     jetstream_password: str = ""
     device_passwords: dict[str, str] = None  # type: ignore[assignment]
+    # Optional SSH debugging, resolved per device (per-device value overrides the
+    # global default in either direction).
+    transcript_debug: bool = False
+    paramiko_debug: bool = False
+    device_transcript_debug: dict[str, bool] = None  # type: ignore[assignment]
+    device_paramiko_debug: dict[str, bool] = None  # type: ignore[assignment]
 
     @staticmethod
     def from_env(environ: dict[str, str] | None = None) -> SshConnectionSettings:
@@ -473,6 +544,10 @@ class SshConnectionSettings:
             for key, value in env.items()
             if key.startswith("HSNC_DEVICE_") and key.endswith("_PASSWORD")
         }
+        # Order matters: match the longer "_SSH_TRANSCRIPT_DEBUG" suffix first so a
+        # transcript key is never misread as a paramiko ("_SSH_DEBUG") key.
+        device_transcript_debug = _device_flags(env, "_SSH_TRANSCRIPT_DEBUG")
+        device_paramiko_debug = _device_flags(env, "_SSH_DEBUG", "_SSH_TRANSCRIPT_DEBUG")
         accept = env.get("HSNC_SSH_ACCEPT_UNKNOWN_HOSTS", "1") not in ("0", "false", "False")
         return SshConnectionSettings(
             host_override=env.get("HSNC_SSH_HOST_OVERRIDE", ""),
@@ -480,12 +555,35 @@ class SshConnectionSettings:
             openwrt_password=env.get("HSNC_OPENWRT_SSH_PASSWORD", ""),
             jetstream_password=env.get("HSNC_JETSTREAM_SSH_PASSWORD", ""),
             device_passwords=device_passwords,
+            transcript_debug=_env_flag(env.get("HSNC_SSH_TRANSCRIPT_DEBUG")),
+            paramiko_debug=_env_flag(env.get("HSNC_SSH_DEBUG")),
+            device_transcript_debug=device_transcript_debug,
+            device_paramiko_debug=device_paramiko_debug,
         )
 
 
 def _device_id_from_env_key(key: str) -> str:
     """``HSNC_DEVICE_SWITCH_1_PASSWORD`` -> normalised id token ``SWITCH_1``."""
     return key[len("HSNC_DEVICE_"):-len("_PASSWORD")]
+
+
+def _device_flags(
+    env: dict[str, str], suffix: str, *exclude_suffixes: str
+) -> dict[str, bool]:
+    """Collect ``HSNC_DEVICE_<ID>{suffix}`` boolean overrides keyed by id token.
+
+    ``exclude_suffixes`` lets a shorter suffix skip keys that actually belong to a
+    longer one (e.g. ``_SSH_DEBUG`` excludes ``_SSH_TRANSCRIPT_DEBUG``).
+    """
+    flags: dict[str, bool] = {}
+    for key, value in env.items():
+        if not (key.startswith("HSNC_DEVICE_") and key.endswith(suffix)):
+            continue
+        if any(key.endswith(other) for other in exclude_suffixes):
+            continue
+        device_id = key[len("HSNC_DEVICE_"):-len(suffix)]
+        flags[device_id] = _env_flag(value)
+    return flags
 
 
 def _normalise_id(device_id: str) -> str:
@@ -506,6 +604,9 @@ class SshConnectionResolver:
 
     def __init__(self, settings: SshConnectionSettings | None = None) -> None:
         self._settings = settings or SshConnectionSettings.from_env()
+        # The global paramiko flag drives the base logger level, which is also what
+        # captures the connection handshake. Apply it as soon as a resolver exists.
+        apply_paramiko_global_debug(self._settings.paramiko_debug)
 
     def resolve(self, device: Device) -> SshTarget:
         defaults = (
@@ -527,7 +628,28 @@ class SshConnectionResolver:
             username=username,
             password=self._password_for(device, defaults["password"]),
             accept_unknown_hosts=self._settings.accept_unknown_hosts,
+            debug_transcript=self._flag_for(
+                device, self._settings.device_transcript_debug, self._settings.transcript_debug
+            ),
+            debug_paramiko=self._flag_for(
+                device, self._settings.device_paramiko_debug, self._settings.paramiko_debug
+            ),
+            label=device.id,
         )
+
+    def _flag_for(
+        self, device: Device, device_flags: dict[str, bool] | None, global_default: bool
+    ) -> bool:
+        """Per-device flag, falling back to the global default.
+
+        An explicit per-device entry wins in either direction (it can force the
+        flag off even when the global default is on).
+        """
+        flags = device_flags or {}
+        specific = flags.get(_normalise_id(device.id))
+        if specific is not None:
+            return specific
+        return global_default
 
     def _password_for(self, device: Device, platform_default: str) -> str:
         passwords = self._settings.device_passwords or {}

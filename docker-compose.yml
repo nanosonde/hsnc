@@ -16,6 +16,11 @@ services:
       HSNC_RETENTION_DAYS: "30"
       # Application log verbosity: debug, info, warning, error, critical.
       HSNC_LOG_LEVEL: "info"
+      # Optional SSH debugging (off by default). Globals shown; per-device variants
+      # HSNC_DEVICE_<ID>_SSH_DEBUG / HSNC_DEVICE_<ID>_SSH_TRANSCRIPT_DEBUG override
+      # them. WARNING: enabling these can write device secrets to the logs.
+      # HSNC_SSH_TRANSCRIPT_DEBUG: "0"
+      # HSNC_SSH_DEBUG: "0"
       # On startup the REST backend reads each device's live config as the
       # history baseline. Set to "0" if the controller is the sole source of
       # truth and devices are never changed out-of-band.
