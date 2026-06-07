@@ -1,7 +1,7 @@
 """P0 safety net: render guardrail + golden-HTML byte-identity for every web page.
 
-This boots the real Flask app against an in-process *mock* container (no SSH, no
-broker) using a fixed fixture config, so the rendered HTML is deterministic. The
+This boots the real Flask app against an in-process *mock* container (no SSH)
+using a fixed fixture config, so the rendered HTML is deterministic. The
 golden snapshots under ``tests/golden/`` are captured from the pre-refactor code
 and MUST stay byte-identical through the REST split. Regenerate intentionally
 with ``REGEN_GOLDEN=1 pytest tests/test_web_routes.py``.

@@ -1,14 +1,13 @@
 """Use case: establish the configuration baseline from the live devices.
 
-On controller start (when enabled) the Device Broker reads the configuration
-currently running on every device. That snapshot becomes the *baseline* —
+On controller start (when enabled) the backend reads the configuration currently
+running on every device. That snapshot becomes the *baseline* —
 ``current_config.json`` — against which staged (desired) changes are diffed, and
 the read is recorded in the apply history as an ``action="baseline"`` event so
 the starting point is visible and survives restarts.
 
 The read is performed through whatever :class:`DeviceAdapterFactory` the process
-is wired with: in the web/oneshot process that is the broker proxy, so even the
-baseline read goes through the broker's warm connections rather than opening new
+is wired with, reusing the backend's warm connections rather than opening new
 ones. A device that cannot be read is skipped (its previous baseline is kept)
 instead of failing the whole run.
 """

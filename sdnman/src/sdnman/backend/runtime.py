@@ -1,9 +1,9 @@
 """Background lifecycle for the REST backend process.
 
-Mirrors the old Device Broker's non-IPC duties inside the API process: keep a
-persistent SSH connection warm to every device, read the baseline once on boot
-(when enabled), and run a periodic poll loop that scrapes live state into the
-runtime store. In mock mode no real connections are opened.
+Owns the backend's non-HTTP duties: keep a persistent SSH connection warm to
+every device, read the baseline once on boot (when enabled), and run a periodic
+poll loop that scrapes live state into the runtime store. In mock mode no real
+connections are opened.
 
 Started from the gunicorn worker (single worker) so the warm runners, the poll
 loop and the request handlers all share one container.

@@ -9,8 +9,9 @@ access points** and **JetStream managed switches** (with VLANs).
 - **Runtime/telemetry storage:** SQLite3 (with retention pruning)
 - **Apply history:** append-only JSONL
 - **Backup:** export/import a single ZIP (config + runtime + history)
-- **Architecture:** Clean Architecture (domain / application / infrastructure / presentation)
-- **Packaging:** Docker container running supervised processes (web + Device Broker) via s6-overlay
+- **Architecture:** two standalone packages in one repo — a REST **backend**
+  (`sdnman/`) and a server-rendered web **frontend** (`sdnweb/`) that share no code
+- **Packaging:** Docker container running supervised processes (web + REST backend) via s6-overlay
 
 > **Status:** The real device drivers (OpenWrt SSH/UCI and JetStream SSH/CLI) are
 > **fully implemented** and exercised by the test suite against the throwaway fake
@@ -23,38 +24,48 @@ access points** and **JetStream managed switches** (with VLANs).
 
 ## Architecture
 
+The repository contains **two independent Python packages that share no source code**:
+
+- **`sdnman/`** — the REST **backend**. It owns all device I/O, polling and
+  persistence and exposes a JSON `/api` surface. Internally it follows Clean
+  Architecture (`domain` / `application` / `infrastructure` / `backend`); the
+  composition root in `sdnman/src/sdnman/infrastructure/container.py` is the only
+  place that wires concrete implementations to the abstract ports.
+- **`sdnweb/`** — the **frontend**. A pure presentation tier (Flask + Jinja2 +
+  HTMX): it holds no device connections, database or use-case logic and reaches
+  the backend over HTTP for every read and write.
+
 ```
-presentation (Flask routes, Jinja2, HTMX)
-        v depends on
+sdnweb (Flask routes, Jinja2, HTMX)
+        v HTTP /api
+sdnman backend (REST app)
+        v
 application (use cases, DTOs, services)
-        v depends on
+        v
 domain (entities, value objects, ports)
         ^ implemented by
 infrastructure (YAML config, SQLite, device adapters, security)
 ```
 
-The composition root in `infrastructure/container.py` is the only place that wires
-concrete implementations to the abstract ports.
-
 ### Config plane vs monitoring plane
 
 Device access is split into two independent planes, and **all device I/O happens
-in the Device Broker, never in a web request** (see *Processes & storage*):
+in the backend, never in a web request** (see *Processes & storage*):
 
 - **Config plane (SSH only).** A `DeviceAdapter` (`supports` / `fetch_config` /
   `push_config`) reads and writes declarative configuration over SSH only —
   OpenWrt UCI and JetStream CLI. SSH is never used for anything but configuration.
 - **Monitoring plane (pluggable).** A `MonitoringProvider`
   (`fetch_status` / `fetch_clients`) supplies runtime data. The provider is
-  selected per device by a `MonitoringProviderFactory`. In the broker the shipped
-  providers are an **SSH-scrape fallback** (OpenWrt `ubus`, JetStream CLI), a
-  **mock** provider (demo data), and a **null** provider. Richer sources
-  (Prometheus node/OpenWrt exporter, SNMPv3 for switches) are intended future
-  providers that slot in behind the same port without touching the config plane.
+  selected per device by a `MonitoringProviderFactory`. The shipped providers are
+  an **SSH-scrape fallback** (OpenWrt `ubus`, JetStream CLI), a **mock** provider
+  (demo data), and a **null** provider. Richer sources (Prometheus node/OpenWrt
+  exporter, SNMPv3 for switches) are intended future providers that slot in behind
+  the same port without touching the config plane.
 
-The **web process** never opens either plane directly: it reads the latest
-monitoring snapshot from the runtime database and proxies any configuration
-read/write to the broker over a Unix socket.
+The **web frontend** never opens either plane directly: every read and write is an
+HTTP call to the backend, which serves runtime data from its latest monitoring
+snapshot and performs all configuration reads/writes itself.
 
 If a device has no working runtime source (e.g. a JetStream switch with no SNMP
 provider yet), it simply reports **no runtime data** rather than failing.
@@ -74,36 +85,35 @@ A failed poll for one device never affects the others or the web UI.
 ### Processes & storage
 
 The container runs **two long-running processes** under s6-overlay that share
-`/data`, plus a one-shot baseline step:
+`/data`:
 
-- **web** (`gunicorn`) — serves the UI. It holds **no device connections**: it
-  reads the runtime database and proxies configuration reads/writes to the
-  broker. It is the only writer of the apply history (`history.jsonl`) and of the
-  staged configuration (`desired_config.json`).
-- **Device Broker** (`sdnman-ctl broker`) — the always-on owner of **all device
-  I/O**. It keeps a persistent SSH connection warm to every device (each on its
-  own thread, reconnecting independently on loss), serves the Unix-socket IPC API
-  the web app calls, and is the **only writer** of the runtime database
-  (`runtime.db`, SQLite in WAL mode) and the baseline (`current_config.json`). On
-  each poll cycle it records a snapshot and prunes rows older than
-  `SDNMAN_RETENTION_DAYS`.
-- **baseline** (`sdnman-ctl baseline`, one-shot) — after the broker is up, reads
-  the live configuration from every device into `current_config.json` and records
-  an `action="baseline"` event in the history, so the starting point is visible
-  and survives restarts. Gated by `SDNMAN_BASELINE_ON_START` (default on).
+- **web** (`gunicorn sdnweb.wsgi:app`) — serves the UI. It holds **no device
+  connections** and no database: every read and write is an HTTP call to the
+  backend.
+- **api / backend** (`gunicorn sdnman.backend.wsgi:app`) — the always-on owner of
+  **all device I/O**. It keeps a persistent SSH connection warm to every device
+  (each on its own thread, reconnecting independently on loss), serves the `/api`
+  surface the web app calls, and is the **only writer** of the runtime database
+  (`runtime.db`, SQLite in WAL mode), the apply history (`history.jsonl`), the
+  staged configuration (`desired_config.json`) and the baseline
+  (`current_config.json`). On each poll cycle it records a snapshot and prunes
+  rows older than `SDNMAN_RETENTION_DAYS`. On startup, gated by
+  `SDNMAN_BASELINE_ON_START` (default on), it reads each device's live
+  configuration into `current_config.json` and records an `action="baseline"`
+  event so the starting point is visible and survives restarts.
 
-Keeping connections in the broker — warm and out of the request path — is what
+Keeping connections in the backend — warm and out of the request path — is what
 makes the web UI fast: an unreachable device can never slow down or block a page.
-The single-writer-per-store split (history/desired in the web, runtime/baseline
-in the broker) means neither process contends with the other for writes.
 
 ## CLI
 
+Two console scripts, one per package:
+
 ```bash
-sdnman-ctl serve            # run the web app (development)
-sdnman-ctl broker           # run the Device Broker (owns device I/O; used by the container)
-sdnman-ctl baseline         # read the live baseline from all devices (needs the broker)
-sdnman-ctl poll             # run one poll cycle and exit (broker profile)
+sdnweb serve                # run the web frontend (development)
+
+sdnman-ctl api              # run the REST backend (owns device I/O; used by the container)
+sdnman-ctl poll             # run one device poll cycle and exit
 sdnman-ctl backup export ./backup.zip
 sdnman-ctl backup import ./backup.zip
 ```
@@ -133,30 +143,25 @@ docker run --rm -p 8080:8080 -e SDNMAN_USE_MOCK_DEVICES=1 sdn-manager:latest
 
 Default logins (change immediately): `admin` / `admin` and `viewer` / `viewer`.
 
-Data (YAML config, `desired_config.json`, `current_config.json`, `runtime.db`,
-`history.jsonl` and the broker socket `broker.sock`) persists in the
-`controller-data` Docker volume.
+Data (YAML config, `desired_config.json`, `current_config.json`, `runtime.db` and
+`history.jsonl`) persists in the `controller-data` Docker volume.
 
 ## Quick start (local dev)
 
+The two packages install separately into the same virtualenv. The web frontend
+needs the backend running (the web test harness also imports it), so install both:
+
 ```bash
 python3 -m venv .venv && . .venv/bin/activate
-pip install -e ".[dev]"
-sdnman-ctl serve --debug          # http://localhost:8080
+pip install -e "./sdnman[dev,ssh]" -e "./sdnweb[dev]"
+
+sdnman-ctl api                    # REST backend on http://localhost:8081 (owns device I/O)
+sdnweb serve --debug              # web UI on http://localhost:8080, in a second shell
 ```
 
-The dashboard, device list and client views work from `serve` alone (they read
-the runtime database and the config files). Reading a device's live config or
-applying changes goes through the Device Broker, so for the full workflow run it
-alongside the web app in a second shell:
-
-```bash
-sdnman-ctl broker                 # owns device I/O; serves /data/broker.sock
-sdnman-ctl baseline               # optional: record the startup baseline
-```
-
-In mock mode (`SDNMAN_USE_MOCK_DEVICES=1`, the default) the broker uses the demo
-providers, so no real hardware is needed.
+In mock mode (`SDNMAN_USE_MOCK_DEVICES=1`, the default) the backend uses the demo
+providers, so no real hardware is needed. Point the frontend at a non-default
+backend with `SDNMAN_API_BASE_URL` (and `SDNMAN_API_TOKEN` when set).
 
 ## Developer tasks
 
@@ -179,11 +184,11 @@ make docker-clean # remove the production image
 The targets use the project virtualenv (`.venv`) automatically when present;
 override the interpreter with `make PYTHON=/path/to/python <target>`.
 
-Or run the tools directly:
+Or run the tools directly in either package:
 
 ```bash
-pytest
-ruff check src tests
+(cd sdnman && pytest && ruff check src tests)
+(cd sdnweb && pytest && ruff check src tests)
 ```
 
 ## Pending changes & apply
@@ -236,7 +241,7 @@ configuration (VLANs, ports, SSIDs, model/firmware) is **not** stored in YAML:
   configuration written by the web app. Reads merge it onto the connection
   profile from `devices.yaml`.
 - **`current_config.json`** (in `SDNMAN_DATA_DIR`) — the last configuration read
-  back from the devices by the broker (the baseline / live state).
+  back from the devices by the backend (the baseline / live state).
 
 `devices.yaml` is environment-specific and ignored by git. Create it from the
 shipped template before running locally:
@@ -253,12 +258,13 @@ from the baked-in template on first run if one does not already exist.
 | Variable                  | Default | Description                              |
 | ------------------------- | ------- | ---------------------------------------- |
 | `SDNMAN_CONFIG_DIR`        | `config`| Path to YAML config directory            |
-| `SDNMAN_DATA_DIR`          | `data`  | Path to runtime data directory (`desired_config.json`, `current_config.json`, `runtime.db`, `history.jsonl`, `broker.sock`) |
+| `SDNMAN_DATA_DIR`          | `data`  | Path to runtime data directory (`desired_config.json`, `current_config.json`, `runtime.db`, `history.jsonl`) |
 | `SDNMAN_USE_MOCK_DEVICES`  | `1`     | `1` mock providers, `0` real SSH drivers |
-| `SDNMAN_POLL_INTERVAL`     | `30`    | Broker poll-cycle interval (seconds)     |
+| `SDNMAN_POLL_INTERVAL`     | `30`    | Backend poll-cycle interval (seconds)    |
 | `SDNMAN_RETENTION_DAYS`    | `30`    | Drop runtime rows older than N days (`0` disables pruning) |
 | `SDNMAN_BASELINE_ON_START` | `1`     | `1` read each device's live config into `current_config.json` at startup and record it as the history baseline; `0` skip |
-| `SDNMAN_BROKER_SOCKET`     | `<data>/broker.sock` | Unix socket the broker listens on and the web app dials |
+| `SDNMAN_API_BASE_URL`      | `http://127.0.0.1:8081` | Backend URL the web frontend calls |
+| `SDNMAN_API_TOKEN`         | _(unset)_ | Bearer token the backend requires and the frontend sends (empty = no auth) |
 | `SDNMAN_SECRET_KEY`        | `dev-insecure-change-me` | Flask session secret (set in production) |
 
 #### Real-device SSH (when `SDNMAN_USE_MOCK_DEVICES=0`)
@@ -291,15 +297,15 @@ Per-device host, port and username come from the `connection` block in
 The UI is server-rendered, with **no Node/JavaScript build pipeline** — the browser
 loads exactly what is checked into the repo:
 
-- **Jinja2 templates** (`presentation/templates/`) render full HTML pages on the
-  server. `base.html` is the shared layout (top bar, left sidebar, content area);
-  each page does `{% extends "base.html" %}` and fills in the content block.
+- **Jinja2 templates** (`sdnweb/src/sdnweb/templates/`) render full HTML pages on
+  the server. `base.html` is the shared layout (top bar, left sidebar, content
+  area); each page does `{% extends "base.html" %}` and fills in the content block.
 - **HTMX** (`static/js/htmx.min.js`) adds the few dynamic bits without hand-written
   JavaScript. You annotate an element with attributes like
   `hx-get="/clients?..."` and `hx-target="#client-table"`: HTMX fetches that URL and
   swaps the returned HTML into the target element. The matching route
-  (`clients_bp.py`) notices the `HX-Request` header and returns just the table
-  partial instead of the whole page. This powers the live client search and
+  (`blueprints/clients_bp.py`) notices the `HX-Request` header and returns just the
+  table partial instead of the whole page. This powers the live client search and
   pagination — the only HTMX on the site.
 - **`static/js/ui.js`** is a tiny hand-written script whose only job is to
   collapse/expand the sidebar and remember that choice in `localStorage`.

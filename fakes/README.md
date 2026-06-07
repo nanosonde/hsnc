@@ -65,7 +65,7 @@ SDNMAN_JETSTREAM_SSH_PASSWORD=admin \
 ```
 
 The backend reads the live baseline on start and polls the devices; run
-`sdnman-ctl serve` in another shell to use the UI against it.
+`sdnweb serve` in another shell to use the UI against it.
 
 ## Mapping to the sample inventory (`config/devices.yaml`)
 
