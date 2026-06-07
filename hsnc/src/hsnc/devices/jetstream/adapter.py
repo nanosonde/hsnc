@@ -1,9 +1,10 @@
 """TP-Link JetStream managed-switch adapter over SSH/CLI.
 
 Configuration plane only — runtime/monitoring data lives in
-:class:`~hsnc.devices.monitoring.JetStreamSshMonitoringProvider`
-(and will move to SNMPv3 once implemented). Talks to JetStream switches using the
-same CLI surface the mock container emulates:
+:class:`~hsnc.devices.jetstream.ssh_monitoring.JetStreamSshMonitoringProvider`
+(primary) or :class:`~hsnc.devices.jetstream.snmp_monitoring.JetStreamSnmpMonitoringProvider`
+(secondary). Talks to JetStream switches using the same CLI surface the mock
+container emulates:
 
 * :meth:`fetch_config`  — ``show running-config`` parsed into VLANs and ports
 * :meth:`push_config`   — :class:`JetStreamCliRenderer` commands fed through one
@@ -19,16 +20,16 @@ from __future__ import annotations
 
 from dataclasses import replace
 
-from ..entities import Device, SwitchPort, Vlan
-from ..enums import DeviceKind, PortMode
-from ..interfaces import DeviceAdapter
-from .config_renderers import JetStreamCliRenderer
-from .ssh_transport import (
+from ...entities import Device, SwitchPort, Vlan
+from ...enums import DeviceKind, PortMode
+from ...interfaces import DeviceAdapter
+from ..ssh_transport import (
     RunnerFactory,
     SshCommandRunner,
     SshConnectionResolver,
     default_runner_factory,
 )
+from .config_renderer import JetStreamCliRenderer
 
 
 class JetStreamCliAdapter(DeviceAdapter):

@@ -10,9 +10,9 @@ from __future__ import annotations
 from ..entities import Device
 from ..enums import DeviceKind
 from ..interfaces import DeviceAdapter, DeviceAdapterFactory
-from .jetstream_cli_adapter import JetStreamCliAdapter
+from .jetstream.adapter import JetStreamCliAdapter
 from .mock_adapter import MockDeviceAdapter
-from .openwrt_ssh_adapter import OpenWrtSshAdapter
+from .openwrt.adapter import OpenWrtSshAdapter
 from .ssh_transport import (
     RunnerFactory,
     SshConnectionResolver,

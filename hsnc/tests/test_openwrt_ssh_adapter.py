@@ -4,8 +4,8 @@ from __future__ import annotations
 
 import json
 
-from hsnc.devices.monitoring import OpenWrtSshMonitoringProvider
-from hsnc.devices.openwrt_ssh_adapter import OpenWrtSshAdapter
+from hsnc.devices.openwrt.adapter import OpenWrtSshAdapter
+from hsnc.devices.openwrt.ssh_monitoring import OpenWrtSshMonitoringProvider
 from hsnc.devices.ssh_transport import (
     FakeSshRunner,
     SshConnectionResolver,

@@ -10,8 +10,8 @@ from hsnc.config.yaml_config_repository import (
     YamlConfigRepository,
 )
 from hsnc.devices.factory import DefaultDeviceAdapterFactory
-from hsnc.devices.jetstream_cli_adapter import JetStreamCliAdapter
-from hsnc.devices.openwrt_ssh_adapter import OpenWrtSshAdapter
+from hsnc.devices.jetstream.adapter import JetStreamCliAdapter
+from hsnc.devices.openwrt.adapter import OpenWrtSshAdapter
 from hsnc.entities import (
     AssociationFailure,
     Client,

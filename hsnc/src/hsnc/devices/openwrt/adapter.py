@@ -1,7 +1,7 @@
 """OpenWrt device adapter (gateway / access point) over SSH + UCI.
 
 Configuration plane only — runtime/monitoring data lives in
-:class:`~hsnc.devices.monitoring.OpenWrtSshMonitoringProvider`.
+:class:`~hsnc.devices.openwrt.ssh_monitoring.OpenWrtSshMonitoringProvider`.
 Talks to OpenWrt-based devices using the same ``uci`` surface the mock container
 emulates:
 
@@ -16,17 +16,17 @@ from __future__ import annotations
 import re
 from dataclasses import replace
 
-from ..entities import Device, SwitchPort, Vlan
-from ..enums import DeviceKind, PortMode
-from ..interfaces import DeviceAdapter
-from ..value_objects import IpAddress
-from .config_renderers import UciConfigRenderer
-from .ssh_transport import (
+from ...entities import Device, SwitchPort, Vlan
+from ...enums import DeviceKind, PortMode
+from ...interfaces import DeviceAdapter
+from ...value_objects import IpAddress
+from ..ssh_transport import (
     RunnerFactory,
     SshCommandRunner,
     SshConnectionResolver,
     default_runner_factory,
 )
+from .config_renderer import UciConfigRenderer
 
 # Matches `pkg.section.option='value'` / `pkg.section=type` lines from `uci show`.
 _UCI_LINE_RE = re.compile(r"^([^.=]+)\.([^.=]+)(?:\.([^=]+))?=(.*)$")

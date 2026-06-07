@@ -1,221 +1,38 @@
 """Monitoring providers — the runtime/monitoring plane.
 
 Separated from the SSH *configuration* adapters so runtime data can come from a
-different source than SSH. Today the SSH-scraping providers are the fallback
-(OpenWrt ``ubus`` and JetStream CLI); future providers (OpenWrt Prometheus
-exporter, SNMPv3 for switches) can slot into :class:`DefaultMonitoringProviderFactory`
-without touching the configuration plane.
+different source than SSH. Each platform owns its providers:
 
-When no monitoring source is available for a device, :class:`NullMonitoringProvider`
-reports it as ``DeviceStatus.UNKNOWN`` with no clients rather than inventing data.
+* OpenWrt — :class:`~hsnc.devices.openwrt.ssh_monitoring.OpenWrtSshMonitoringProvider`
+  (primary, ``ubus`` over SSH) and
+  :class:`~hsnc.devices.openwrt.prometheus_monitoring.OpenWrtPrometheusMonitoringProvider`
+  (secondary, Prometheus node-exporter).
+* JetStream — :class:`~hsnc.devices.jetstream.ssh_monitoring.JetStreamSshMonitoringProvider`
+  (primary, SSH CLI) and
+  :class:`~hsnc.devices.jetstream.snmp_monitoring.JetStreamSnmpMonitoringProvider`
+  (secondary, SNMPv3).
+
+:class:`DefaultMonitoringProviderFactory` picks the provider per device from the
+device's ``monitoring.source`` (primary / secondary / none). When no monitoring
+source is available, :class:`NullMonitoringProvider` reports the device as
+``DeviceStatus.UNKNOWN`` with no clients rather than inventing data.
 """
 
 from __future__ import annotations
 
-import json
-import re
 from dataclasses import replace
 
 from ..entities import Client, Device
 from ..enums import ConnectionType, DeviceKind, DeviceStatus
 from ..interfaces import MonitoringProvider, MonitoringProviderFactory
 from ..value_objects import DataVolume, IpAddress, MacAddress, Throughput
+from .jetstream.ssh_monitoring import JetStreamSshMonitoringProvider
+from .openwrt.ssh_monitoring import OpenWrtSshMonitoringProvider
 from .ssh_transport import (
     RunnerFactory,
-    SshCommandRunner,
     SshConnectionResolver,
-    SshError,
     default_runner_factory,
 )
-
-_MAC_TABLE_RE = re.compile(
-    r"^([0-9A-Fa-f]{2}(?:[-:][0-9A-Fa-f]{2}){5})\s+(\d+)\s+(\S+)", re.MULTILINE
-)
-_UPTIME_RE = re.compile(
-    r"(?:(\d+)\s*days?)?\s*(\d{1,2}):(\d{2}):(\d{2})", re.IGNORECASE
-)
-
-
-class OpenWrtSshMonitoringProvider(MonitoringProvider):
-    """Scrapes OpenWrt runtime state over SSH (``ubus``) as the fallback source.
-
-    DHCP leases come from the ``dhcp`` ubus object when present (odhcpd) and fall
-    back to the dnsmasq lease file (``/tmp/dhcp.leases``) otherwise.
-    """
-
-    def __init__(
-        self,
-        resolver: SshConnectionResolver | None = None,
-        runner_factory: RunnerFactory = default_runner_factory,
-    ) -> None:
-        self._resolver = resolver or SshConnectionResolver()
-        self._runner_factory = runner_factory
-
-    def _runner(self, device: Device) -> SshCommandRunner:
-        return self._runner_factory(self._resolver.resolve(device))
-
-    def fetch_status(self, device: Device) -> Device:
-        runner = self._runner(device)
-        with runner:
-            board = json.loads(runner.run("ubus call system board"))
-            try:
-                lan = json.loads(runner.run("ubus call network.interface.lan status"))
-            except Exception:  # noqa: BLE001 - lan iface may be absent
-                lan = {}
-        release = board.get("release", {}) or {}
-        firmware = release.get("version") or device.firmware
-        return replace(
-            device,
-            status=DeviceStatus.CONNECTED,
-            model=board.get("model") or device.model,
-            firmware=firmware,
-            uptime_seconds=int(lan.get("uptime", device.uptime_seconds) or 0),
-        )
-
-    def fetch_clients(self, device: Device) -> list[Client]:
-        runner = self._runner(device)
-        with runner:
-            try:
-                raw = runner.run("ubus call dhcp ipv4leases")
-            except SshError:
-                # Devices that serve DHCP via dnsmasq have no odhcpd ``dhcp``
-                # ubus object, so fall back to parsing the dnsmasq lease file.
-                return self._clients_from_lease_file(
-                    device, runner.run("cat /tmp/dhcp.leases")
-                )
-        return self._clients_from_ubus(device, raw)
-
-    @staticmethod
-    def _clients_from_ubus(device: Device, raw: str) -> list[Client]:
-        data = json.loads(raw) if raw.strip() else {}
-        clients: list[Client] = []
-        for bridge in (data.get("device") or {}).values():
-            for lease in bridge.get("ipv4-leases", []) or []:
-                mac = lease.get("mac")
-                address = lease.get("address")
-                if not mac:
-                    continue
-                hostname = lease.get("hostname") or mac
-                clients.append(
-                    Client(
-                        id=f"{device.id}-{MacAddress(mac)}",
-                        name=hostname,
-                        mac=MacAddress(mac),
-                        connection=ConnectionType.WIRED,
-                        status=DeviceStatus.CONNECTED,
-                        ip=IpAddress(address) if address else None,
-                        ap_or_port=device.name,
-                        site_id=device.site_id,
-                    )
-                )
-        return clients
-
-    @staticmethod
-    def _clients_from_lease_file(device: Device, raw: str) -> list[Client]:
-        # dnsmasq lease line: "<expiry> <mac> <ip> <hostname> <client-id>".
-        clients: list[Client] = []
-        for line in raw.splitlines():
-            parts = line.split()
-            if len(parts) < 4:
-                continue
-            mac, address, hostname = parts[1], parts[2], parts[3]
-            if mac.count(":") != 5:
-                continue
-            mac_obj = MacAddress(mac)
-            name = hostname if hostname not in ("", "*") else str(mac_obj)
-            clients.append(
-                Client(
-                    id=f"{device.id}-{mac_obj}",
-                    name=name,
-                    mac=mac_obj,
-                    connection=ConnectionType.WIRED,
-                    status=DeviceStatus.CONNECTED,
-                    ip=IpAddress(address) if address not in ("", "*") else None,
-                    ap_or_port=device.name,
-                    site_id=device.site_id,
-                )
-            )
-        return clients
-
-
-class JetStreamSshMonitoringProvider(MonitoringProvider):
-    """Scrapes JetStream runtime state over the SSH CLI as the fallback source.
-
-    Replace with an SNMPv3 provider once implemented; until then this keeps the
-    switch's runtime data populated.
-    """
-
-    def __init__(
-        self,
-        resolver: SshConnectionResolver | None = None,
-        runner_factory: RunnerFactory = default_runner_factory,
-    ) -> None:
-        self._resolver = resolver or SshConnectionResolver()
-        self._runner_factory = runner_factory
-
-    def _runner(self, device: Device) -> SshCommandRunner:
-        return self._runner_factory(self._resolver.resolve(device))
-
-    def fetch_status(self, device: Device) -> Device:
-        runner = self._runner(device)
-        with runner:
-            # JetStream switches reject SSH ``exec`` channels, so reads go
-            # through one interactive shell session.
-            raw = runner.run_shell(["show system-info"])
-        info = self._parse_key_values(raw)
-        mac = info.get("MAC Address")
-        return replace(
-            device,
-            status=DeviceStatus.CONNECTED,
-            name=info.get("Device Name", device.name),
-            model=info.get("Device Model", device.model),
-            firmware=info.get("Software Version", device.firmware),
-            mac=MacAddress(mac) if mac else device.mac,
-            uptime_seconds=self._parse_uptime(info.get("Running Time", "")),
-        )
-
-    def fetch_clients(self, device: Device) -> list[Client]:
-        runner = self._runner(device)
-        with runner:
-            # JetStream switches reject SSH ``exec`` channels, so reads go
-            # through one interactive shell session.
-            raw = runner.run_shell(["show mac address-table"])
-        clients: list[Client] = []
-        for mac, _vlan, port in _MAC_TABLE_RE.findall(raw):
-            clients.append(
-                Client(
-                    id=f"{device.id}-{MacAddress(mac)}",
-                    name=str(MacAddress(mac)),
-                    mac=MacAddress(mac),
-                    connection=ConnectionType.WIRED,
-                    status=DeviceStatus.CONNECTED,
-                    ap_or_port=port,
-                    site_id=device.site_id,
-                )
-            )
-        return clients
-
-    @staticmethod
-    def _parse_key_values(raw: str) -> dict[str, str]:
-        info: dict[str, str] = {}
-        for line in raw.splitlines():
-            if " - " in line:
-                key, _, value = line.partition(" - ")
-                info[key.strip()] = value.strip()
-        return info
-
-    @staticmethod
-    def _parse_uptime(text: str) -> int:
-        match = _UPTIME_RE.search(text)
-        if not match:
-            return 0
-        days, hours, minutes, seconds = match.groups()
-        return (
-            int(days or 0) * 86400
-            + int(hours) * 3600
-            + int(minutes) * 60
-            + int(seconds)
-        )
 
 
 class NullMonitoringProvider(MonitoringProvider):

@@ -1,133 +1,26 @@
-"""Platform-native config renderers (the inverse of pushing config).
+"""Renderer factory routing devices to their platform-native config renderer.
 
-Each renderer turns a declarative :class:`Device` into the concrete command
-sequence that would provision it on its target platform:
+The renderers themselves live with their platform code:
 
-* :class:`UciConfigRenderer` — OpenWrt ``uci`` commands sent over SSH.
-* :class:`JetStreamCliRenderer` — TP-Link JetStream CLI commands over SSH.
+* :class:`~hsnc.devices.openwrt.config_renderer.UciConfigRenderer`
+* :class:`~hsnc.devices.jetstream.config_renderer.JetStreamCliRenderer`
 
-These power the command-level diff on the Pending Changes view, so an operator
-sees the exact commands that lead to both the applied and the desired state.
+They are re-exported here for convenience so existing import sites keep working.
 """
 
 from __future__ import annotations
 
 from ..entities import Device
-from ..enums import DeviceKind, PortMode
-from ..interfaces import (
-    DeviceConfigRenderer,
-    DeviceConfigRendererFactory,
-)
+from ..enums import DeviceKind
+from ..interfaces import DeviceConfigRenderer, DeviceConfigRendererFactory
+from .jetstream.config_renderer import JetStreamCliRenderer
+from .openwrt.config_renderer import UciConfigRenderer
 
-
-class UciConfigRenderer(DeviceConfigRenderer):
-    """Renders OpenWrt configuration as ``uci`` commands (DSA bridge model)."""
-
-    @property
-    def platform(self) -> str:
-        return "OpenWrt (UCI over SSH)"
-
-    def render(self, device: Device) -> list[str]:
-        lines: list[str] = [f"uci set system.@system[0].hostname='{device.name}'"]
-        if device.ip:
-            lines.append(f"uci set network.lan.ipaddr='{device.ip}'")
-
-        if device.vlans or device.ports:
-            lines.extend(self._render_switch(device))
-
-        for idx, ssid in enumerate(device.ssids):
-            lines.append(f"uci set wireless.@wifi-iface[{idx}].ssid='{ssid}'")
-            lines.append(f"uci set wireless.@wifi-iface[{idx}].network='lan'")
-
-        lines.append("uci commit")
-        return lines
-
-    def settings(self, device: Device) -> dict[str, str]:
-        """Flatten the config into concrete UCI option paths (LuCI-style).
-
-        Bridge-VLAN sections are keyed by their VLAN id (``[10]``) rather than an
-        anonymous index so the diff stays stable and readable.
-        """
-        s: dict[str, str] = {"system.@system[0].hostname": device.name}
-        if device.ip:
-            s["network.lan.ipaddr"] = str(device.ip)
-
-        ports = sorted(device.ports, key=lambda p: p.number)
-        for vlan in sorted(device.vlans, key=lambda v: v.vlan_id):
-            base = f"network.@bridge-vlan[{vlan.vlan_id}]"
-            members: list[str] = []
-            for port in ports:
-                if not port.enabled:
-                    continue
-                if vlan.vlan_id in port.tagged_vlans:
-                    members.append(f"lan{port.number}:t")
-                elif port.pvid == vlan.vlan_id:
-                    members.append(f"lan{port.number}:u*")
-            s[f"{base}.device"] = "br-lan"
-            s[f"{base}.vlan"] = str(vlan.vlan_id)
-            s[f"{base}.ports"] = " ".join(members)
-
-        for idx, ssid in enumerate(device.ssids):
-            s[f"wireless.@wifi-iface[{idx}].ssid"] = ssid
-            s[f"wireless.@wifi-iface[{idx}].network"] = "lan"
-        return s
-
-    @staticmethod
-    def _render_switch(device: Device) -> list[str]:
-        lines: list[str] = []
-        ports = sorted((p for p in device.ports), key=lambda p: p.number)
-        for vlan in sorted(device.vlans, key=lambda v: v.vlan_id):
-            members: list[str] = []
-            for port in ports:
-                if not port.enabled:
-                    continue
-                if vlan.vlan_id in port.tagged_vlans:
-                    members.append(f"lan{port.number}:t")
-                elif port.pvid == vlan.vlan_id:
-                    # untagged + PVID member in OpenWrt DSA syntax
-                    members.append(f"lan{port.number}:u*")
-            lines.append(f"uci add network bridge-vlan  # VLAN {vlan.vlan_id} ({vlan.name})")
-            lines.append("uci set network.@bridge-vlan[-1].device='br-lan'")
-            lines.append(f"uci set network.@bridge-vlan[-1].vlan='{vlan.vlan_id}'")
-            lines.append(f"uci set network.@bridge-vlan[-1].ports='{' '.join(members)}'")
-        return lines
-
-
-class JetStreamCliRenderer(DeviceConfigRenderer):
-    """Renders TP-Link JetStream switch configuration as CLI commands."""
-
-    @property
-    def platform(self) -> str:
-        return "TP-Link JetStream CLI (SSH)"
-
-    def render(self, device: Device) -> list[str]:
-        lines: list[str] = ["configure", f"hostname {device.name}"]
-
-        for vlan in sorted(device.vlans, key=lambda v: v.vlan_id):
-            lines.append(f"vlan {vlan.vlan_id}")
-            if vlan.name:
-                lines.append(f" name {vlan.name}")
-            lines.append(" exit")
-
-        for port in sorted(device.ports, key=lambda p: p.number):
-            lines.append(f"interface gigabitEthernet 1/0/{port.number}")
-            if not port.enabled:
-                lines.append(" shutdown")
-            if port.mode is PortMode.ACCESS:
-                lines.append(" switchport mode access")
-                lines.append(f" switchport access vlan {port.pvid}")
-            else:
-                allowed = ",".join(
-                    str(v) for v in sorted({port.pvid, *port.tagged_vlans})
-                )
-                lines.append(f" switchport mode {port.mode.value}")
-                lines.append(f" switchport general allowed vlan {allowed}")
-                lines.append(f" switchport pvid {port.pvid}")
-            lines.append(" exit")
-
-        lines.append("end")
-        lines.append("copy running-config startup-config")
-        return lines
+__all__ = [
+    "DefaultConfigRendererFactory",
+    "JetStreamCliRenderer",
+    "UciConfigRenderer",
+]
 
 
 class DefaultConfigRendererFactory(DeviceConfigRendererFactory):

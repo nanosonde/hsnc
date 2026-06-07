@@ -2,8 +2,8 @@
 
 from __future__ import annotations
 
-from hsnc.devices.jetstream_cli_adapter import JetStreamCliAdapter
-from hsnc.devices.monitoring import JetStreamSshMonitoringProvider
+from hsnc.devices.jetstream.adapter import JetStreamCliAdapter
+from hsnc.devices.jetstream.ssh_monitoring import JetStreamSshMonitoringProvider
 from hsnc.devices.ssh_transport import (
     FakeSshRunner,
     SshConnectionResolver,
