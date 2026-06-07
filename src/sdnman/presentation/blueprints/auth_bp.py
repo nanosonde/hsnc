@@ -22,8 +22,8 @@ def login():
     if request.method == "POST":
         username = request.form.get("username", "").strip()
         password = request.form.get("password", "")
-        container = current_app.config["CONTAINER"]
-        result = container.authenticate_user.execute(username, password)
+        api = current_app.config["API"]
+        result = api.login(username, password)
         if result is None:
             flash("Invalid username or password.", "error")
             return render_template("login.html", username=username), 401

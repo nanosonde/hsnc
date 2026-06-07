@@ -65,6 +65,12 @@ def auth_verify() -> Response:
 # -- dashboard / reads ------------------------------------------------------
 
 
+@bp.get("/site")
+def site() -> Response:
+    current = _container().config.get_site()
+    return jsonify({"id": current.id, "name": current.name})
+
+
 @bp.get("/dashboard")
 def dashboard() -> Response:
     return _ok(_container().get_dashboard_summary.execute())

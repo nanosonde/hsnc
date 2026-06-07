@@ -12,9 +12,9 @@ bp = Blueprint("dashboard", __name__)
 @bp.route("/")
 @login_required
 def index():
-    container = current_app.config["CONTAINER"]
-    summary = container.get_dashboard_summary.execute()
-    diff = container.get_config_diff.execute()
+    container = current_app.config["API"]
+    summary = container.get_dashboard()
+    diff = container.get_config_diff()
     return render_template(
         "dashboard.html", summary=summary, diff=diff, active="dashboard"
     )

@@ -14,8 +14,10 @@ from pathlib import Path
 
 import pytest
 
-from sdnman.infrastructure.container import Container, Settings
+from sdnman.infrastructure.container import Settings
 from sdnman.presentation.app import create_app
+
+from .harness import backend_api_client
 
 _FIXTURES = Path(__file__).resolve().parent / "web_fixtures"
 _GOLDEN = Path(__file__).resolve().parent / "golden"
@@ -42,8 +44,8 @@ def app(tmp_path):
         use_mock_devices=True,
         baseline_on_start=False,
     )
-    container = Container(settings, profile="broker")
-    flask_app = create_app(settings, container=container)
+    api_client, container = backend_api_client(settings)
+    flask_app = create_app(settings, api_client=api_client)
     flask_app.config["READ_ONLY"] = True
     flask_app.config["TESTING"] = True
     try:

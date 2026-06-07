@@ -150,6 +150,9 @@ class ApiClient:
 
     # -- reads -------------------------------------------------------------
 
+    def get_site(self) -> dict[str, str]:
+        return self._json("GET", "/api/site")
+
     def get_dashboard(self) -> vt.DashboardSummary:
         return vt.DashboardSummary.from_dict(self._json("GET", "/api/dashboard"))
 

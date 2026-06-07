@@ -22,6 +22,8 @@ def settings_from_env() -> Settings:
         "False",
     )
     broker_socket = Path(os.environ.get("SDNMAN_BROKER_SOCKET", data_dir / "broker.sock"))
+    api_base_url = os.environ.get("SDNMAN_API_BASE_URL", "http://127.0.0.1:8081")
+    api_token = os.environ.get("SDNMAN_API_TOKEN", "")
     return Settings(
         config_dir=config_dir,
         data_dir=data_dir,
@@ -30,6 +32,8 @@ def settings_from_env() -> Settings:
         retention_days=retention_days,
         baseline_on_start=baseline_on_start,
         broker_socket=broker_socket,
+        api_base_url=api_base_url,
+        api_token=api_token,
         ssh=SshConnectionSettings.from_env(),
     )
 

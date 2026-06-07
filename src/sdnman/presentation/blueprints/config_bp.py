@@ -18,17 +18,14 @@ from flask import (
     url_for,
 )
 
-from ...application.use_cases.edit_device_config import (
-    ConfigEditError,
-    DeviceNotFoundError,
-)
+from ..api_client import ConfigEditError, DeviceNotFoundError
 from ..auth import current_user, login_required, role_required
 
 bp = Blueprint("config", __name__)
 
 
 def _container():
-    return current_app.config["CONTAINER"]
+    return current_app.config["API"]
 
 
 def _parse_vlan_list(raw: str) -> list[int]:
@@ -46,7 +43,7 @@ def _parse_vlan_list(raw: str) -> list[int]:
 @login_required
 def edit(device_id: str):
     container = _container()
-    detail = container.get_device_detail.execute(device_id)
+    detail = container.get_device_detail(device_id)
     if detail is None:
         abort(404)
     return render_template("device_edit.html", detail=detail, active="devices")
@@ -57,7 +54,7 @@ def edit(device_id: str):
 def save_vlan(device_id: str):
     container = _container()
     try:
-        container.save_vlan.execute(
+        container.save_vlan(
             device_id,
             vlan_id=int(request.form["vlan_id"]),
             name=request.form.get("name", "").strip(),
@@ -75,7 +72,7 @@ def save_vlan(device_id: str):
 def delete_vlan(device_id: str, vlan_id: int):
     container = _container()
     try:
-        container.delete_vlan.execute(device_id, vlan_id)
+        container.delete_vlan(device_id, vlan_id)
     except (DeviceNotFoundError, ConfigEditError) as exc:
         flash(f"Could not delete VLAN: {exc}", "error")
     else:
@@ -88,7 +85,7 @@ def delete_vlan(device_id: str, vlan_id: int):
 def save_port(device_id: str, number: int):
     container = _container()
     try:
-        container.save_port.execute(
+        container.save_port(
             device_id,
             number=number,
             name=request.form.get("name", "").strip(),
@@ -111,7 +108,7 @@ def save_ssids(device_id: str):
     raw = request.form.get("ssids", "")
     ssids = [line.strip() for line in raw.splitlines() if line.strip()]
     try:
-        container.save_ssids.execute(device_id, ssids)
+        container.save_ssids(device_id, ssids)
     except DeviceNotFoundError as exc:
         flash(f"Could not save SSIDs: {exc}", "error")
     else:
@@ -123,8 +120,8 @@ def save_ssids(device_id: str):
 @login_required
 def pending():
     container = _container()
-    diff = container.get_config_diff.execute()
-    plan = container.plan_apply.execute()
+    diff = container.get_config_diff()
+    plan = container.get_apply_plan()
     return render_template(
         "pending_changes.html", diff=diff, plan=plan, active="pending"
     )
@@ -147,7 +144,7 @@ def _flash_apply_result(result) -> None:
 def apply():
     container = _container()
     user = current_user() or {}
-    result = container.apply_config.execute(username=user.get("username", ""))
+    result = container.apply_config(username=user.get("username", ""))
     _flash_apply_result(result)
     return redirect(url_for("config.pending"))
 
@@ -157,7 +154,7 @@ def apply():
 def apply_device(device_id: str):
     container = _container()
     user = current_user() or {}
-    result = container.apply_config.execute(
+    result = container.apply_config(
         device_ids=[device_id], username=user.get("username", "")
     )
     _flash_apply_result(result)
@@ -168,7 +165,7 @@ def apply_device(device_id: str):
 @role_required("admin")
 def revert():
     container = _container()
-    reverted = container.revert_changes.execute()
+    reverted = container.revert_changes()
     if reverted:
         flash(f"Reverted {reverted} device(s) to the last applied configuration.", "success")
     else:
@@ -180,7 +177,7 @@ def revert():
 @role_required("admin")
 def revert_device(device_id: str):
     container = _container()
-    reverted = container.revert_changes.execute(device_ids=[device_id])
+    reverted = container.revert_changes(device_ids=[device_id])
     if reverted:
         flash("Device reverted to the last applied configuration.", "success")
     else:
@@ -192,5 +189,5 @@ def revert_device(device_id: str):
 @login_required
 def history():
     container = _container()
-    events = container.list_apply_history.execute()
+    events = container.list_apply_history()
     return render_template("apply_history.html", events=events, active="history")

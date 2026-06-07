@@ -73,6 +73,8 @@ class Settings:
     retention_days: int = 30
     baseline_on_start: bool = True
     broker_socket: Path = Path("/data/broker.sock")
+    api_base_url: str = "http://127.0.0.1:8081"
+    api_token: str = ""
     ssh: SshConnectionSettings = field(default_factory=SshConnectionSettings)
 
     @property

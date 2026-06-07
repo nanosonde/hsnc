@@ -19,11 +19,11 @@ def _parse_int(value: str | None, default: int) -> int:
 @bp.route("/clients")
 @login_required
 def index():
-    container = current_app.config["CONTAINER"]
+    container = current_app.config["API"]
     search = request.args.get("search", "")
     page = _parse_int(request.args.get("page"), 1)
     page_size = _parse_int(request.args.get("page_size"), 10)
-    paged = container.list_clients.execute(search=search, page=page, page_size=page_size)
+    paged = container.list_clients(search=search, page=page, page_size=page_size)
 
     # HTMX requests carry an "HX-Request" header. For those we return just the
     # table fragment so HTMX can swap it into #client-table; a normal browser

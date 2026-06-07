@@ -16,6 +16,7 @@ from flask import (
     url_for,
 )
 
+from ..api_client import ApiError
 from ..auth import login_required, role_required
 
 bp = Blueprint("backup", __name__)
@@ -30,8 +31,8 @@ def index():
 @bp.route("/backup/export")
 @role_required("admin")
 def export():
-    container = current_app.config["CONTAINER"]
-    data = container.export_backup.execute()
+    container = current_app.config["API"]
+    data = container.export_backup()
     stamp = datetime.now(UTC).strftime("%Y%m%d-%H%M%S")
     return send_file(
         io.BytesIO(data),
@@ -44,14 +45,14 @@ def export():
 @bp.route("/backup/import", methods=["POST"])
 @role_required("admin")
 def import_backup():
-    container = current_app.config["CONTAINER"]
+    container = current_app.config["API"]
     file = request.files.get("archive")
     if file is None or not file.filename:
         flash("No backup file selected.", "error")
         return redirect(url_for("backup.index"))
     try:
-        container.import_backup.execute(file.read())
-    except (ValueError, KeyError) as exc:
+        container.import_backup(file.read())
+    except (ValueError, KeyError, ApiError) as exc:
         flash(f"Import failed: {exc}", "error")
         return redirect(url_for("backup.index"))
     flash("Backup imported successfully.", "success")

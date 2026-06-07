@@ -12,6 +12,6 @@ bp = Blueprint("topology", __name__)
 @bp.route("/topology")
 @login_required
 def index():
-    container = current_app.config["CONTAINER"]
-    view = container.get_topology.execute()
+    container = current_app.config["API"]
+    view = container.get_topology()
     return render_template("topology.html", topology=view, active="topology")

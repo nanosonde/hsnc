@@ -1,21 +1,20 @@
 """Flask application factory.
 
-The web app holds no device connections: a separate Device Broker process
-(``sdnman-ctl broker``) owns all device I/O and is the sole writer of the runtime
-database. The web app reads the latest runtime snapshot and proxies any
-configuration read/write to the broker over its Unix socket. There is no
-in-process scheduler.
+The web app holds no device connections, no database and no use-case logic: it is
+a pure presentation tier. Every read and write goes to the REST backend over HTTP
+via :class:`~sdnman.presentation.api_client.ApiClient`. The backend owns all
+device I/O, polling and persistence.
 """
 
 from __future__ import annotations
 
-import atexit
 import os
 from pathlib import Path
 
 from flask import Flask, flash, redirect, render_template, request, url_for
 
-from ..infrastructure.container import Container, Settings
+from ..infrastructure.container import Settings
+from .api_client import ApiClient
 from .auth import register_template_globals
 from .blueprints import (
     auth_bp,
@@ -32,7 +31,7 @@ _TEMPLATES = Path(__file__).resolve().parent / "templates"
 _STATIC = Path(__file__).resolve().parent / "static"
 
 
-def create_app(settings: Settings | None = None, container: Container | None = None) -> Flask:
+def create_app(settings: Settings | None = None, api_client: ApiClient | None = None) -> Flask:
     settings = settings or settings_from_env()
 
     app = Flask(
@@ -41,7 +40,7 @@ def create_app(settings: Settings | None = None, container: Container | None = N
         static_folder=str(_STATIC),
     )
     app.config["SECRET_KEY"] = os.environ.get("SDNMAN_SECRET_KEY", "dev-insecure-change-me")
-    app.config["CONTAINER"] = container or Container(settings)
+    app.config["API"] = api_client or ApiClient(settings.api_base_url, settings.api_token)
     app.config["SETTINGS"] = settings
     app.config["READ_ONLY"] = True
 
@@ -67,8 +66,11 @@ def create_app(settings: Settings | None = None, container: Container | None = N
 
     @app.context_processor
     def inject_site_name() -> dict[str, str]:
-        container: Container = app.config["CONTAINER"]
-        return {"site_name": container.config.get_site().name}
+        name = app.config.get("SITE_NAME")
+        if name is None:
+            name = app.config["API"].get_site()["name"]
+            app.config["SITE_NAME"] = name
+        return {"site_name": name}
 
     app.register_blueprint(auth_bp.bp)
     app.register_blueprint(dashboard_bp.bp)
@@ -79,12 +81,6 @@ def create_app(settings: Settings | None = None, container: Container | None = N
     app.register_blueprint(config_bp.bp)
 
     _register_error_handlers(app)
-
-    container: Container = app.config["CONTAINER"]
-
-    @atexit.register
-    def _shutdown() -> None:  # pragma: no cover - process teardown
-        container.close()
 
     return app
 

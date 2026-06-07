@@ -11,43 +11,16 @@ from __future__ import annotations
 import zipfile
 from io import BytesIO
 from pathlib import Path
-from typing import Any
 
 import pytest
 
-from sdnman.backend.app import create_api_app
-from sdnman.infrastructure.container import Container, Settings
+from sdnman.infrastructure.container import Settings
 from sdnman.presentation import viewtypes as vt
-from sdnman.presentation.api_client import ApiClient, DeviceNotFoundError
+from sdnman.presentation.api_client import DeviceNotFoundError
+
+from .harness import backend_api_client
 
 _FIXTURES = Path(__file__).resolve().parent / "web_fixtures"
-
-
-class FlaskTestTransport:
-    """Routes ApiClient requests through a Flask test client."""
-
-    def __init__(self, client) -> None:
-        self._client = client
-
-    def request(
-        self,
-        method: str,
-        path: str,
-        *,
-        params: dict[str, Any] | None = None,
-        json: Any | None = None,
-        data: bytes | None = None,
-        headers: dict[str, str] | None = None,
-    ) -> tuple[int, bytes]:
-        resp = self._client.open(
-            path,
-            method=method,
-            query_string=params,
-            json=json,
-            data=data,
-            headers=headers or {},
-        )
-        return resp.status_code, resp.get_data()
 
 
 @pytest.fixture
@@ -58,10 +31,7 @@ def api(tmp_path):
         use_mock_devices=True,
         baseline_on_start=False,
     )
-    container = Container(settings, profile="api")
-    container.poll_device_state.execute()
-    app = create_api_app(settings, container=container)
-    client = ApiClient(transport=FlaskTestTransport(app.test_client()))
+    client, container = backend_api_client(settings)
     try:
         yield client
     finally:
