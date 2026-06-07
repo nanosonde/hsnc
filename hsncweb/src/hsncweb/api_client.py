@@ -173,6 +173,17 @@ class ApiClient:
             self._raise(status, body)
         return vt.DeviceDetail.from_dict(json.loads(body))
 
+    def get_ssh_log(self, device_id: str, limit: int = 1000) -> vt.SshConsole | None:
+        status, body = self._send(
+            "GET", f"/api/devices/{device_id}/ssh-log", params={"limit": limit}
+        )
+        if status == 404:
+            return None
+        if status >= 400:
+            self._raise(status, body)
+        return vt.SshConsole.from_dict(json.loads(body))
+
+
     def list_clients(
         self, search: str = "", page: int = 1, page_size: int = 10
     ) -> vt.PagedClients:

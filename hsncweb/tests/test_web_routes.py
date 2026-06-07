@@ -111,6 +111,21 @@ def test_clients_htmx_partial_matches_golden(auth_client):
     _check_golden("clients_partial", resp.get_data(as_text=True))
 
 
+def test_ssh_log_renders_terminal_partial(auth_client):
+    resp = auth_client.get("/devices/switch-1/ssh-log", headers={"HX-Request": "true"})
+    assert resp.status_code == 200
+    html = resp.get_data(as_text=True)
+    assert 'class="terminal"' in html
+    # Mock devices -> no live SSH session, so the empty-state message shows.
+    assert "No SSH activity (mock devices)." in html
+
+
+def test_ssh_log_unknown_device_404(auth_client):
+    resp = auth_client.get("/devices/does-not-exist/ssh-log")
+    assert resp.status_code == 404
+
+
+
 def test_read_only_blocks_apply(auth_client):
     resp = auth_client.post("/config/apply", follow_redirects=False)
     assert resp.status_code in (302, 303)

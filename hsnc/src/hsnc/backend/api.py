@@ -99,6 +99,66 @@ def device_detail(device_id: str) -> Response:
     return _ok(detail)
 
 
+@bp.get("/devices/<device_id>/ssh-log")
+def device_ssh_log(device_id: str) -> Response:
+    """Return the recent SSH transcript (commands + output) for one device.
+
+    The backend keeps a warm persistent SSH connection per device and records the
+    commands it sends and the output devices return into a bounded ring buffer.
+    This serves the last ``limit`` lines for the terminal-style viewer. In mock
+    mode (no real SSH) it reports the connection as unavailable with no lines.
+    """
+    from ..devices.ssh_transport import SSH_LOG_MAX_LINES
+
+    container = _container()
+    device = container.config.get_device(device_id)
+    if device is None:
+        abort(404)
+
+    try:
+        limit = int(request.args.get("limit", "1000"))
+    except (TypeError, ValueError):
+        limit = 1000
+    limit = max(1, min(limit, SSH_LOG_MAX_LINES))
+
+    settings = current_app.config["SETTINGS"]
+    payload = {
+        "device_id": device.id,
+        "name": device.name,
+        "mock": settings.use_mock_devices,
+        "available": False,
+        "connected": False,
+        "last_error": "",
+        "limit": limit,
+        "lines": [],
+    }
+
+    if settings.use_mock_devices:
+        return jsonify(payload)
+
+    pool = current_app.config.get("POOL")
+    if pool is not None:
+        for conn in pool.snapshot():
+            if conn["device_id"] == device.id:
+                payload["connected"] = bool(conn["connected"])
+                payload["last_error"] = conn["last_error"]
+                break
+
+    resolver = container.ssh_resolver
+    registry = container.runner_registry
+    if resolver is not None and registry is not None:
+        runner = registry.peek(resolver.resolve(device))
+        if runner is not None:
+            payload["available"] = True
+            payload["lines"] = [
+                {"ts": e.ts, "kind": e.kind, "text": e.text}
+                for e in runner.transcript.lines(limit)
+            ]
+
+    return jsonify(payload)
+
+
+
 @bp.get("/clients")
 def clients() -> Response:
     def _int(name: str, default: int) -> int:

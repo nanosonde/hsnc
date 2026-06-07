@@ -1,0 +1,74 @@
+{# SSH console partial: terminal-style transcript for one device.
+   Loaded into #ssh-modal-body via HTMX. The line-count <select> and the
+   refresh button re-fire an hx-get against the same route, swapping this
+   whole partial back in (so the header pill + lines all stay consistent). #}
+<div class="ssh-console" id="ssh-console"
+     data-available="{{ '1' if console.available else '0' }}">
+  <div class="ssh-console__head">
+    <div class="ssh-console__title">
+      <span class="ssh-console__name">{{ console.name }}</span>
+      {% if console.mock %}
+      <span class="pill pill--muted">MOCK</span>
+      {% elif console.connected %}
+      <span class="pill pill--ok">CONNECTED</span>
+      {% elif console.available %}
+      <span class="pill pill--warn">OFFLINE</span>
+      {% else %}
+      <span class="pill pill--muted">NO SESSION</span>
+      {% endif %}
+    </div>
+    <div class="ssh-console__controls">
+      <label class="ssh-console__lines">
+        Lines
+        <select name="limit"
+                hx-get="{{ url_for('devices.ssh_log', device_id=console.device_id) }}"
+                hx-target="#ssh-modal-body"
+                hx-swap="innerHTML">
+          {% for opt in limits %}
+          <option value="{{ opt }}" {% if opt == limit %}selected{% endif %}>{{ opt }}</option>
+          {% endfor %}
+        </select>
+      </label>
+      <button type="button" class="icon-btn"
+              title="Refresh"
+              hx-get="{{ url_for('devices.ssh_log', device_id=console.device_id, limit=limit) }}"
+              hx-target="#ssh-modal-body"
+              hx-swap="innerHTML">
+        <svg viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor"
+             stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+          <path d="M23 4v6h-6"/><path d="M20.49 15a9 9 0 1 1-2.12-9.36L23 10"/>
+        </svg>
+      </button>
+    </div>
+  </div>
+
+  {% if console.last_error %}
+  <div class="ssh-console__error">Last error: {{ console.last_error }}</div>
+  {% endif %}
+
+  <div class="terminal" id="ssh-terminal" tabindex="0">
+    {% if console.lines %}
+    {% for line in console.lines %}
+    <div class="terminal__line terminal__line--{{ line.kind }}">
+      <span class="terminal__ts">{{ line.clock }}</span>
+      {% if line.kind == 'sent' %}<span class="terminal__prompt">$</span>{% endif %}
+      <span class="terminal__text">{{ line.text }}</span>
+    </div>
+    {% endfor %}
+    {% elif console.mock %}
+    <div class="terminal__empty">No SSH activity (mock devices).</div>
+    {% elif not console.available %}
+    <div class="terminal__empty">No SSH session has been opened for this device yet.</div>
+    {% else %}
+    <div class="terminal__empty">No SSH activity recorded yet.</div>
+    {% endif %}
+  </div>
+</div>
+
+{# Auto-scroll to the newest line whenever this partial is (re)loaded. #}
+<script>
+  (function () {
+    var term = document.getElementById("ssh-terminal");
+    if (term) { term.scrollTop = term.scrollHeight; }
+  })();
+</script>

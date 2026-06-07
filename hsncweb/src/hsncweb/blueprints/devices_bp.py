@@ -9,6 +9,7 @@ from flask import (
     flash,
     redirect,
     render_template,
+    request,
     url_for,
 )
 
@@ -33,6 +34,29 @@ def detail(device_id: str):
     if detail is None:
         abort(404)
     return render_template("device_detail.html", detail=detail, active="devices")
+
+
+# Line-count choices offered in the SSH console viewer.
+_SSH_LOG_LIMITS = (200, 1000, 5000)
+
+
+@bp.route("/devices/<device_id>/ssh-log")
+@role_required("admin")
+def ssh_log(device_id: str):
+    container = current_app.config["API"]
+    try:
+        limit = int(request.args.get("limit", "1000"))
+    except (TypeError, ValueError):
+        limit = 1000
+    if limit not in _SSH_LOG_LIMITS:
+        limit = 1000
+    console = container.get_ssh_log(device_id, limit=limit)
+    if console is None:
+        abort(404)
+    return render_template(
+        "partials/ssh_console.html", console=console, limits=_SSH_LOG_LIMITS, limit=limit
+    )
+
 
 
 def _flash_sync_result(result) -> None:

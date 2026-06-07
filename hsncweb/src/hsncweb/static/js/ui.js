@@ -24,3 +24,38 @@
     apply(collapsed);
   });
 })();
+
+/*
+ * Modal helpers — used by the device "View SSH connection" terminal popup.
+ * openModal()/closeModal() toggle the [hidden] attribute on an overlay; the
+ * HTMX hx-get on the trigger button fills the modal body separately. Pressing
+ * Escape or clicking the backdrop closes whichever modal is open.
+ */
+function openModal(id) {
+  var el = document.getElementById(id);
+  if (!el) return;
+  el.hidden = false;
+  document.body.classList.add("modal-open");
+}
+
+function closeModal(id) {
+  var el = document.getElementById(id);
+  if (!el) return;
+  el.hidden = true;
+  document.body.classList.remove("modal-open");
+}
+
+(function () {
+  document.addEventListener("keydown", function (e) {
+    if (e.key !== "Escape") return;
+    var open = document.querySelector(".modal-overlay:not([hidden])");
+    if (open) closeModal(open.id);
+  });
+
+  document.addEventListener("click", function (e) {
+    // Click on the backdrop (the overlay itself, not its content) closes it.
+    if (e.target.classList && e.target.classList.contains("modal-overlay")) {
+      closeModal(e.target.id);
+    }
+  });
+})();

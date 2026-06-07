@@ -482,3 +482,52 @@ class ApplyEvent:
             action=d.get("action", "apply"),
             id=d.get("id"),
         )
+
+
+@dataclass(frozen=True)
+class SshLine:
+    """One line of the SSH transcript shown in the terminal viewer."""
+
+    ts: float
+    kind: str
+    text: str
+
+    @property
+    def clock(self) -> str:
+        """``HH:MM:SS`` timestamp for the gutter (empty if unparseable)."""
+        try:
+            return datetime.fromtimestamp(self.ts).strftime("%H:%M:%S")
+        except (ValueError, OverflowError, OSError):
+            return ""
+
+    @classmethod
+    def from_dict(cls, d: dict[str, Any]) -> SshLine:
+        return cls(ts=d.get("ts", 0.0), kind=d.get("kind", "recv"), text=d.get("text", ""))
+
+
+@dataclass(frozen=True)
+class SshConsole:
+    """The SSH transcript for one device plus its live connection health."""
+
+    device_id: str
+    name: str
+    mock: bool
+    available: bool
+    connected: bool
+    last_error: str
+    limit: int
+    lines: list[SshLine] = field(default_factory=list)
+
+    @classmethod
+    def from_dict(cls, d: dict[str, Any]) -> SshConsole:
+        return cls(
+            device_id=d["device_id"],
+            name=d["name"],
+            mock=d.get("mock", False),
+            available=d.get("available", False),
+            connected=d.get("connected", False),
+            last_error=d.get("last_error", ""),
+            limit=d.get("limit", 1000),
+            lines=[SshLine.from_dict(line) for line in d.get("lines", [])],
+        )
+

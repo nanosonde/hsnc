@@ -106,6 +106,64 @@ def test_topology_and_history_and_diff_and_plan(client):
     assert client.get("/api/config/plan").status_code == 200
 
 
+def test_ssh_log_mock_mode_reports_unavailable(client):
+    resp = client.get("/api/devices/switch-1/ssh-log")
+    assert resp.status_code == 200
+    body = resp.get_json()
+    assert body["device_id"] == "switch-1"
+    assert body["mock"] is True
+    assert body["available"] is False
+    assert body["lines"] == []
+    assert body["limit"] == 1000
+
+
+def test_ssh_log_unknown_device_returns_404(client):
+    resp = client.get("/api/devices/does-not-exist/ssh-log")
+    assert resp.status_code == 404
+
+
+def test_ssh_log_clamps_limit(client):
+    resp = client.get("/api/devices/switch-1/ssh-log?limit=999999")
+    body = resp.get_json()
+    from hsnc.devices.ssh_transport import SSH_LOG_MAX_LINES
+
+    assert body["limit"] == SSH_LOG_MAX_LINES
+
+    resp = client.get("/api/devices/switch-1/ssh-log?limit=0")
+    assert resp.get_json()["limit"] == 1
+
+
+def test_ssh_log_returns_recorded_lines(tmp_path):
+    from hsnc.backend.app import create_api_app
+    from hsnc.container import Container, Settings
+    from hsnc.devices.ssh_transport import FakeSshRunner
+
+    settings = Settings(
+        config_dir=_FIXTURES,
+        data_dir=tmp_path,
+        use_mock_devices=False,
+        baseline_on_start=False,
+    )
+    container = Container(settings)
+    try:
+        device = container.config.get_device("switch-1")
+        target = container.ssh_resolver.resolve(device)
+        runner = FakeSshRunner()
+        runner.transcript.record("sent", "uci show network")
+        runner.transcript.record("recv", "network.lan=interface")
+        container.runner_registry._runners[container.runner_registry._key(target)] = runner
+
+        client = create_api_app(settings, container=container).test_client()
+        body = client.get("/api/devices/switch-1/ssh-log").get_json()
+        assert body["mock"] is False
+        assert body["available"] is True
+        texts = [line["text"] for line in body["lines"]]
+        assert "uci show network" in texts
+        assert "network.lan=interface" in texts
+    finally:
+        container.close()
+
+
 def test_save_vlan_then_delete(client):
     resp = client.post(
         "/api/config/devices/switch-1/vlans",

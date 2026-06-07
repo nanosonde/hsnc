@@ -60,6 +60,17 @@ def test_devices_and_detail(api):
     assert api.get_device_detail("nope") is None
 
 
+def test_get_ssh_log(api):
+    console = api.get_ssh_log("switch-1")
+    assert isinstance(console, vt.SshConsole)
+    assert console.device_id == "switch-1"
+    assert console.mock is True
+    assert console.available is False
+    assert console.lines == []
+    assert api.get_ssh_log("nope") is None
+
+
+
 def test_clients_topology_history(api):
     paged = api.list_clients(page=1, page_size=5)
     assert isinstance(paged, vt.PagedClients)

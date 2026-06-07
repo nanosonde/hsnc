@@ -23,11 +23,17 @@ import re
 import threading
 import time
 from abc import ABC, abstractmethod
+from collections import deque
 from collections.abc import Callable, Sequence
 from dataclasses import dataclass
 
 from ..entities import Device
 from ..enums import DeviceKind
+
+# Upper bound on the per-connection SSH transcript ring buffer (commands sent and
+# device output). Older lines are dropped once the cap is reached. Overridable so
+# operators can trade memory for a deeper history.
+SSH_LOG_MAX_LINES = max(1, int(os.environ.get("HSNC_SSH_LOG_LINES", "5000") or "5000"))
 
 # Platform defaults applied when a device's connection leaves a field blank.
 _OPENWRT_DEFAULTS = {"port": 22, "username": "root", "password": "openwrt"}
@@ -49,6 +55,46 @@ _PROMPT_RE = re.compile(r"\S+[>#][ \t]*\Z")
 # Set HSNC_SSH_DEBUG=1 to restore paramiko's own logging while diagnosing.
 if not os.environ.get("HSNC_SSH_DEBUG"):
     logging.getLogger("paramiko").setLevel(logging.CRITICAL)
+
+
+@dataclass(frozen=True)
+class TranscriptEntry:
+    """One recorded line of SSH activity.
+
+    ``kind`` is ``sent`` (a command we issued), ``recv`` (output the device
+    transmitted back), ``info`` (a connection lifecycle note) or ``error``.
+    """
+
+    ts: float
+    kind: str
+    text: str
+
+
+class SshTranscript:
+    """Thread-safe, bounded ring buffer of recent SSH activity for one runner.
+
+    Output is split into individual lines so the frontend can render a terminal
+    view; the buffer keeps at most ``maxlen`` lines (oldest dropped first).
+    """
+
+    def __init__(self, maxlen: int = SSH_LOG_MAX_LINES) -> None:
+        self._entries: deque[TranscriptEntry] = deque(maxlen=maxlen)
+        self._lock = threading.Lock()
+
+    def record(self, kind: str, text: str) -> None:
+        if not text:
+            return
+        now = time.time()
+        with self._lock:
+            for line in text.splitlines():
+                self._entries.append(TranscriptEntry(now, kind, line))
+
+    def lines(self, limit: int | None = None) -> list[TranscriptEntry]:
+        with self._lock:
+            entries = list(self._entries)
+        if limit is not None and 0 <= limit < len(entries):
+            entries = entries[-limit:]
+        return entries
 
 
 class SshError(RuntimeError):
@@ -89,6 +135,12 @@ class ParamikoSshRunner(SshCommandRunner):
     def __init__(self, target: SshTarget) -> None:
         self._target = target
         self._client = None  # lazily connected paramiko.SSHClient
+        self._transcript = SshTranscript()
+
+    @property
+    def transcript(self) -> SshTranscript:
+        """The rolling record of commands sent and output received."""
+        return self._transcript
 
     # -- connection lifecycle ------------------------------------------------
     def _connect(self):
@@ -124,9 +176,18 @@ class ParamikoSshRunner(SshCommandRunner):
                 timeout=self._target.timeout,
             )
         except Exception as exc:  # noqa: BLE001 - normalise to SshError
+            self._transcript.record(
+                "error",
+                f"SSH connection to {self._target.host}:{self._target.port} failed: {exc}",
+            )
             raise SshError(
                 f"SSH connection to {self._target.host}:{self._target.port} failed: {exc}"
             ) from exc
+        self._transcript.record(
+            "info",
+            f"connected to {self._target.host}:{self._target.port} "
+            f"as {self._target.username}",
+        )
         self._client = client
         return client
 
@@ -145,11 +206,17 @@ class ParamikoSshRunner(SshCommandRunner):
     # -- command execution ---------------------------------------------------
     def run(self, command: str) -> str:
         client = self._connect()
+        self._transcript.record("sent", command)
         _stdin, stdout, stderr = client.exec_command(command, timeout=self._target.timeout)
         out = stdout.read().decode("utf-8", "replace")
         err = stderr.read().decode("utf-8", "replace")
         status = stdout.channel.recv_exit_status()
+        if out:
+            self._transcript.record("recv", out)
+        if err:
+            self._transcript.record("recv", err)
         if status != 0:
+            self._transcript.record("error", f"command exited with status {status}")
             raise SshError(
                 f"command {command!r} exited with status {status}: {err.strip() or out.strip()}"
             )
@@ -161,12 +228,17 @@ class ParamikoSshRunner(SshCommandRunner):
         channel.settimeout(self._target.timeout)
         collected: list[str] = []
         # Drain the initial banner/prompt.
-        collected.append(self._drain(channel))
+        banner = self._drain(channel)
+        collected.append(banner)
+        self._transcript.record("recv", banner)
         for command in commands:
             # CR-LF: real JetStream switches submit a CLI line on the carriage
             # return; the LF gives line-oriented readers (the mock) a boundary.
             channel.sendall(command.rstrip("\r\n") + "\r\n")
-            collected.append(self._drain(channel))
+            self._transcript.record("sent", command)
+            chunk = self._drain(channel)
+            collected.append(chunk)
+            self._transcript.record("recv", chunk)
         channel.close()
         return "".join(collected)
 
@@ -221,21 +293,34 @@ class FakeSshRunner(SshCommandRunner):
         self._errors = tuple(errors or ())
         self.commands: list[str] = []
         self.shell_invocations: list[list[str]] = []
+        self._transcript = SshTranscript()
+
+    @property
+    def transcript(self) -> SshTranscript:
+        return self._transcript
 
     def run(self, command: str) -> str:
         self.commands.append(command)
+        self._transcript.record("sent", command)
         if any(command.startswith(prefix) for prefix in self._errors):
+            self._transcript.record("error", f"command {command!r} failed (fake)")
             raise SshError(f"command {command!r} failed (fake)")
         if command in self._responses:
+            self._transcript.record("recv", self._responses[command])
             return self._responses[command]
         best = ""
         for key in self._responses:
             if command.startswith(key) and len(key) > len(best):
                 best = key
-        return self._responses.get(best, "")
+        result = self._responses.get(best, "")
+        self._transcript.record("recv", result)
+        return result
 
     def run_shell(self, commands: Sequence[str]) -> str:
         self.shell_invocations.append(list(commands))
+        for command in commands:
+            self._transcript.record("sent", command)
+        self._transcript.record("recv", self._shell_output)
         return self._shell_output
 
     def __enter__(self) -> FakeSshRunner:
@@ -349,6 +434,15 @@ class PersistentRunnerRegistry:
                 runner = PersistentSshRunner(target)
                 self._runners[key] = runner
             return runner
+
+    def peek(self, target: SshTarget) -> PersistentSshRunner | None:
+        """Return the existing runner for a target, or None if not yet created.
+
+        Unlike :meth:`get`, this never creates a connection, so callers that only
+        want to read an existing transcript don't spin up an empty runner.
+        """
+        with self._lock:
+            return self._runners.get(self._key(target))
 
     def all_runners(self) -> list[PersistentSshRunner]:
         with self._lock:
