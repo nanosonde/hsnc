@@ -95,8 +95,23 @@ class OpenWrtSshAdapter(DeviceAdapter):
             commands = [
                 "uci delete network.@bridge-vlan[0]" for _ in range(count)
             ] + self._renderer.render(device)
-            for command in commands:
-                runner.run(command)
+
+            # UCI stages every change in a scratch area and only mutates the
+            # running config on `uci commit` (the final rendered command). Clear
+            # any stale staging first, then stage the whole batch; if any command
+            # fails mid-way, `uci revert` discards the partial batch so the device
+            # is left exactly as it was instead of half-reconfigured.
+            runner.run("uci revert")
+            try:
+                for command in commands:
+                    runner.run(command)
+            except Exception:
+                try:
+                    runner.run("uci revert")
+                except Exception:  # noqa: BLE001 - best-effort cleanup; re-raise original
+                    pass
+                raise
+
 
     # -- parsing helpers -----------------------------------------------------
     @staticmethod

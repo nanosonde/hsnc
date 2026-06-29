@@ -172,3 +172,27 @@ def test_push_config_clears_existing_bridge_vlans_then_renders() -> None:
     assert len(deletes) == 2  # two existing bridge-vlan sections cleared
     assert "uci commit" in runner.commands
     assert any(c.startswith("uci set system.@system[0].hostname=") for c in runner.commands)
+
+
+def test_push_config_reverts_staging_on_failure() -> None:
+    import pytest
+
+    from hsnc.devices.ssh_transport import SshError
+
+    # Fail while staging the IP address: nothing should be committed, and the
+    # staged batch must be reverted so the running config stays untouched.
+    runner = FakeSshRunner(
+        {"uci show network": _UCI_NETWORK},
+        errors=["uci set network.lan.ipaddr"],
+    )
+    device = _device()
+    device.vlans = []
+
+    with pytest.raises(SshError):
+        _adapter(runner).push_config(device)
+
+    assert "uci commit" not in runner.commands
+    # A leading revert clears stale staging and a trailing revert rolls back the
+    # partial batch -> the failing push issues `uci revert` at least twice.
+    assert runner.commands.count("uci revert") >= 2
+

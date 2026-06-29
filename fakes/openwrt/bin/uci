@@ -11,6 +11,7 @@ Implements just the surface the hsnc OpenWrt adapter/renderer uses:
     uci add_list <pkg>.<section>.<option>=<value>
     uci delete <pkg>.<section>[.<option>]
     uci commit [<pkg>]               (no-op: state is persisted on every write)
+    uci revert [<pkg>]               (no-op: the mock has no staging area)
     uci batch                        (reads the above commands, one per line, from stdin)
 
 State is persisted in canonical `uci show` format at $MOCK_STATE_DIR/uci.conf so a
@@ -279,6 +280,8 @@ def dispatch(state: State, argv: list[str]) -> tuple[int, bool]:
         return cmd_delete(state, rest[0]), True
     if cmd == "commit":
         return 0, False  # state already persisted on each write
+    if cmd == "revert":
+        return 0, False  # no staging area in the mock; nothing to roll back
     sys.stderr.write(f"uci: unknown command '{cmd}'\n")
     return 1, False
 
