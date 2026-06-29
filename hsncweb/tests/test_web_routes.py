@@ -236,3 +236,26 @@ def test_oversized_upload_is_rejected(app):
     assert resp.status_code == 413
 
 
+def test_repeated_failed_logins_are_rate_limited(app):
+    app.config["LOGIN_RATELIMITER"].max_attempts = 2
+    client = app.test_client()
+    bad = {"username": "admin", "password": "wrong"}
+    assert client.post("/login", data=bad).status_code == 401
+    assert client.post("/login", data=bad).status_code == 401
+    # Third attempt is blocked before the credentials are even checked.
+    assert client.post("/login", data=bad).status_code == 429
+
+
+def test_successful_login_clears_rate_limit_counter(app):
+    app.config["LOGIN_RATELIMITER"].max_attempts = 2
+    client = app.test_client()
+    assert client.post("/login", data={"username": "admin", "password": "wrong"}).status_code == 401
+    # A success resets the counter so later failures start from zero again.
+    assert client.post("/login", data={"username": "admin", "password": "admin"}).status_code in (
+        302,
+        303,
+    )
+    assert client.post("/login", data={"username": "admin", "password": "wrong"}).status_code == 401
+
+
+

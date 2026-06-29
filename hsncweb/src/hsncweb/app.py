@@ -26,6 +26,7 @@ from .blueprints import (
     topology_bp,
 )
 from .csrf import init_csrf
+from .ratelimit import LoginRateLimiter
 from .settings import DEFAULT_SECRET_KEY, WebSettings, settings_from_env
 
 _TEMPLATES = Path(__file__).resolve().parent / "templates"
@@ -46,6 +47,10 @@ def create_app(settings: WebSettings | None = None, api_client: ApiClient | None
     app.config["API"] = api_client or ApiClient(settings.api_base_url, settings.api_token)
     app.config["SETTINGS"] = settings
     app.config["READ_ONLY"] = True
+    app.config["LOGIN_RATELIMITER"] = LoginRateLimiter(
+        max_attempts=settings.login_max_attempts,
+        window_seconds=settings.login_window_seconds,
+    )
 
     # Session-cookie hardening. HTTPONLY and SameSite=Lax are always safe and
     # mitigate XSS cookie theft and cross-site form submission; Secure (HTTPS

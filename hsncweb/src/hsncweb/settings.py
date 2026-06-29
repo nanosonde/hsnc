@@ -20,6 +20,8 @@ class WebSettings:
     secret_key: str = "dev-insecure-change-me"
     session_cookie_secure: bool = False
     max_upload_mb: int = 25
+    login_max_attempts: int = 5
+    login_window_seconds: int = 300
 
 
 DEFAULT_SECRET_KEY = "dev-insecure-change-me"
@@ -49,5 +51,7 @@ def settings_from_env() -> WebSettings:
         secret_key=os.environ.get("HSNC_SECRET_KEY", DEFAULT_SECRET_KEY),
         session_cookie_secure=_env_flag("HSNC_SESSION_COOKIE_SECURE", False),
         max_upload_mb=_env_int("HSNC_MAX_UPLOAD_MB", 25),
+        login_max_attempts=_env_int("HSNC_LOGIN_MAX_ATTEMPTS", 5),
+        login_window_seconds=_env_int("HSNC_LOGIN_WINDOW_SECONDS", 300),
     )
 
