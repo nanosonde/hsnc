@@ -24,6 +24,14 @@ access points** and **JetStream managed switches** (with VLANs).
 > sample inventory — VLAN, port and wireless editing plus the review/apply
 > workflow then work end-to-end without any devices.
 
+## Documentation
+
+Full guides live in [`docs/`](docs/README.md): a [user/admin guide](docs/user-guide/README.md),
+a [developer guide](docs/developer-guide/README.md) with an
+[architecture overview](docs/developer-guide/architecture.md), per-device
+[setup guides](docs/devices/README.md), [ADRs](docs/adr/README.md) and a
+[requirements](docs/requirements.md) reference.
+
 ## Architecture
 
 The repository contains **two independent Python packages that share no source code**:
