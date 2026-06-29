@@ -49,8 +49,9 @@ _logger = logging.getLogger(__name__)
 class NullMonitoringProvider(MonitoringProvider):
     """No monitoring source: report reachability as unknown, no clients.
 
-    Used for devices whose monitoring backend (e.g. SNMPv3) is not yet
-    implemented, so the UI honestly shows "unknown" instead of fabricated data.
+    Used for devices with ``monitoring.source: none`` and for misconfigured
+    secondary sources, so the UI honestly shows "unknown" instead of fabricated
+    data.
     """
 
     def fetch_status(self, device: Device) -> Device:

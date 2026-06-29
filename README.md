@@ -81,8 +81,9 @@ The **web frontend** never opens either plane directly: every read and write is 
 HTTP call to the backend, which serves runtime data from its latest monitoring
 snapshot and performs all configuration reads/writes itself.
 
-If a device has no working runtime source (e.g. a JetStream switch with no SNMP
-provider yet), it simply reports **no runtime data** rather than failing.
+If a device has no working runtime source (e.g. its `monitoring.source` is
+`none`, or a chosen secondary channel is unreachable), it simply reports **no
+runtime data** rather than failing.
 
 ### Reachability
 

@@ -80,10 +80,11 @@ class MonitoringProvider(ABC):
     """Reads live runtime state (the **monitoring plane**) for a device.
 
     Decoupled from :class:`DeviceAdapter` (configuration) so monitoring can use a
-    different transport than SSH. Implementations may scrape SSH (the fallback),
-    an OpenWrt Prometheus exporter, SNMPv3 for switches, etc. When no monitoring
-    source is available, :class:`NullMonitoringProvider` reports the device as
-    ``DeviceStatus.UNKNOWN`` with no clients rather than inventing data.
+    different transport than SSH. The shipped implementations scrape SSH (the
+    *primary* source), read an OpenWrt Prometheus exporter or SNMPv3 for switches
+    (the *secondary* sources). When no monitoring source is available,
+    :class:`NullMonitoringProvider` reports the device as ``DeviceStatus.UNKNOWN``
+    with no clients rather than inventing data.
     """
 
     @abstractmethod
