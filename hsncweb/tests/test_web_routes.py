@@ -9,6 +9,7 @@ with ``REGEN_GOLDEN=1 pytest tests/test_web_routes.py``.
 
 from __future__ import annotations
 
+import io
 import os
 import re
 from pathlib import Path
@@ -193,4 +194,45 @@ def test_post_with_csrf_token_is_accepted(csrf_app):
 def test_get_requests_need_no_csrf_token(csrf_app):
     client = csrf_app.test_client()
     assert client.get("/login").status_code == 200
+
+
+# -- Input validation guards -------------------------------------------------
+
+
+def test_save_vlan_missing_field_flashes_not_500(auth_client):
+    # Omitting the required vlan_id must yield a user-facing redirect, not a 500.
+    resp = auth_client.post(
+        "/devices/switch-1/vlans",
+        data={"name": "x", "subnet": ""},
+        follow_redirects=False,
+    )
+    assert resp.status_code in (302, 303), resp.data
+
+
+def test_save_vlan_out_of_range_flashes_not_500(auth_client):
+    resp = auth_client.post(
+        "/devices/switch-1/vlans",
+        data={"vlan_id": "99999", "name": "x"},
+        follow_redirects=False,
+    )
+    assert resp.status_code in (302, 303), resp.data
+
+
+def test_clients_page_size_is_clamped(auth_client):
+    # An absurd page_size must not 500; it is clamped server-side.
+    resp = auth_client.get("/clients?page_size=999999")
+    assert resp.status_code == 200
+
+
+def test_oversized_upload_is_rejected(app):
+    app.config["MAX_CONTENT_LENGTH"] = 64
+    client = app.test_client()
+    client.post("/login", data={"username": "admin", "password": "admin"})
+    resp = client.post(
+        "/backup/import",
+        data={"archive": (io.BytesIO(b"x" * 4096), "big.zip")},
+        content_type="multipart/form-data",
+    )
+    assert resp.status_code == 413
+
 

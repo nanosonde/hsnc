@@ -55,6 +55,10 @@ _PROMPT_RE = re.compile(r"\S+[>#][ \t]*\Z")
 _TRANSCRIPT_LOG = logging.getLogger("hsnc.ssh.transcript")
 _TRANSCRIPT_LOG.setLevel(logging.DEBUG)
 
+# Diagnostics for the persistent-runner reconnect-and-retry path, so an operator
+# can see when a device dropped the link mid-command (vs. a hard failure).
+_RUNNER_LOG = logging.getLogger("hsnc.ssh.runner")
+
 # Per-device paramiko transport logs are re-pointed onto child channels named
 # "paramiko.transport.<normalised-id>" so a single device can be debugged in
 # isolation (see HSNC_DEVICE_<ID>_SSH_DEBUG).
@@ -462,7 +466,12 @@ class PersistentSshRunner(ParamikoSshRunner):
         with self._op_lock:
             try:
                 return super().run(command)
-            except Exception:  # noqa: BLE001 - dropped link: reconnect once, retry
+            except Exception as exc:  # noqa: BLE001 - dropped link: reconnect once, retry
+                _RUNNER_LOG.warning(
+                    "SSH command on %s failed (%s); reconnecting and retrying once.",
+                    self._target.label or self._target.host,
+                    exc,
+                )
                 self.close()
                 return super().run(command)
 
@@ -470,7 +479,12 @@ class PersistentSshRunner(ParamikoSshRunner):
         with self._op_lock:
             try:
                 return super().run_shell(commands)
-            except Exception:  # noqa: BLE001 - dropped link: reconnect once, retry
+            except Exception as exc:  # noqa: BLE001 - dropped link: reconnect once, retry
+                _RUNNER_LOG.warning(
+                    "SSH shell on %s failed (%s); reconnecting and retrying once.",
+                    self._target.label or self._target.host,
+                    exc,
+                )
                 self.close()
                 return super().run_shell(commands)
 

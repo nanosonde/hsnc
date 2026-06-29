@@ -16,13 +16,19 @@ def _parse_int(value: str | None, default: int) -> int:
         return default
 
 
+# Bound pagination so a crafted request cannot ask the backend to materialise an
+# unbounded result set (memory-exhaustion DoS).
+_MAX_PAGE_SIZE = 100
+
+
 @bp.route("/clients")
 @login_required
 def index():
     container = current_app.config["API"]
     search = request.args.get("search", "")
-    page = _parse_int(request.args.get("page"), 1)
+    page = max(1, _parse_int(request.args.get("page"), 1))
     page_size = _parse_int(request.args.get("page_size"), 10)
+    page_size = max(1, min(page_size, _MAX_PAGE_SIZE))
     paged = container.list_clients(search=search, page=page, page_size=page_size)
 
     # HTMX requests carry an "HX-Request" header. For those we return just the

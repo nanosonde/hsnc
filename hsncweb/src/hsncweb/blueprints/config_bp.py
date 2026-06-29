@@ -28,14 +28,42 @@ def _container():
     return current_app.config["API"]
 
 
+_VLAN_MIN = 1
+_VLAN_MAX = 4094
+
+
+def _int_field(name: str, *, min_value: int, max_value: int) -> int:
+    """Read a required integer form field, validating its range.
+
+    Raises ``ValueError`` (which every caller already turns into a user-facing
+    flash) for a missing, non-numeric or out-of-range value, instead of letting
+    a ``KeyError``/``ValueError`` escape as a 500.
+    """
+    raw = request.form.get(name, "").strip()
+    if not raw:
+        raise ValueError(f"{name.replace('_', ' ').title()} is required.")
+    value = int(raw)
+    if not min_value <= value <= max_value:
+        raise ValueError(
+            f"{name.replace('_', ' ').title()} must be between {min_value} and {max_value}."
+        )
+    return value
+
+
 def _parse_vlan_list(raw: str) -> list[int]:
     if not raw.strip():
         return []
     result: list[int] = []
     for chunk in raw.replace(";", ",").split(","):
         chunk = chunk.strip()
-        if chunk:
-            result.append(int(chunk))
+        if not chunk:
+            continue
+        vid = int(chunk)
+        if not _VLAN_MIN <= vid <= _VLAN_MAX:
+            raise ValueError(f"VLAN ID {vid} is out of range ({_VLAN_MIN}-{_VLAN_MAX}).")
+        result.append(vid)
+        if len(result) > _VLAN_MAX:
+            raise ValueError("Too many tagged VLANs.")
     return result
 
 
@@ -56,7 +84,7 @@ def save_vlan(device_id: str):
     try:
         container.save_vlan(
             device_id,
-            vlan_id=int(request.form["vlan_id"]),
+            vlan_id=_int_field("vlan_id", min_value=_VLAN_MIN, max_value=_VLAN_MAX),
             name=request.form.get("name", "").strip(),
             subnet=request.form.get("subnet", "").strip(),
         )
@@ -91,7 +119,7 @@ def save_port(device_id: str, number: int):
             name=request.form.get("name", "").strip(),
             enabled=request.form.get("enabled") == "on",
             mode=request.form.get("mode", "access"),
-            pvid=int(request.form["pvid"]),
+            pvid=_int_field("pvid", min_value=_VLAN_MIN, max_value=_VLAN_MAX),
             tagged_vlans=_parse_vlan_list(request.form.get("tagged_vlans", "")),
         )
     except (DeviceNotFoundError, ConfigEditError, ValueError) as exc:

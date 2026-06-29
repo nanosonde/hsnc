@@ -56,6 +56,9 @@ def create_app(settings: WebSettings | None = None, api_client: ApiClient | None
         SESSION_COOKIE_SAMESITE="Lax",
         SESSION_COOKIE_SECURE=settings.session_cookie_secure,
         PERMANENT_SESSION_LIFETIME=timedelta(hours=8),
+        # Reject oversized request bodies before they are read into memory,
+        # capping the cost of a malicious or accidental huge backup upload.
+        MAX_CONTENT_LENGTH=settings.max_upload_mb * 1024 * 1024,
     )
 
     if settings.secret_key == DEFAULT_SECRET_KEY:
@@ -116,6 +119,15 @@ def _register_error_handlers(app: Flask) -> None:
     @app.errorhandler(404)
     def not_found(_error):  # type: ignore[no-untyped-def]
         return render_template("error.html", code=404, message="Page not found"), 404
+
+    @app.errorhandler(413)
+    def payload_too_large(_error):  # type: ignore[no-untyped-def]
+        return (
+            render_template(
+                "error.html", code=413, message="Uploaded file is too large."
+            ),
+            413,
+        )
 
     @app.errorhandler(500)
     def server_error(_error):  # type: ignore[no-untyped-def]
