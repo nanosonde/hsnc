@@ -27,6 +27,7 @@
           <td>
             <form method="post" action="{{ url_for('config.delete_vlan', device_id=detail.row.id, vlan_id=v.vlan_id) }}"
                   onsubmit="return confirm('Remove VLAN {{ v.vlan_id }}?');">
+              {{ csrf_field() -}}
               <button class="btn" type="submit">Delete</button>
             </form>
           </td>
@@ -40,6 +41,7 @@
 
   <h4 class="section-title">Add / Update VLAN</h4>
   <form method="post" action="{{ url_for('config.save_vlan', device_id=detail.row.id) }}" class="toolbar">
+    {{ csrf_field() -}}
     <div class="field" style="margin:0">
       <label>VLAN ID</label>
       <input name="vlan_id" type="number" min="1" max="4094" required style="width:110px" />
@@ -72,7 +74,7 @@
         {% for p in detail.ports %}
         <tr>
           <form method="post" action="{{ url_for('config.save_port', device_id=detail.row.id, number=p.number) }}">
-            <td>{{ p.number }}</td>
+            <td>{{ p.number }}{{ csrf_field() }}</td>
             <td><input name="name" value="{{ p.name }}" style="width:110px" /></td>
             <td><input name="enabled" type="checkbox" {% if p.enabled %}checked{% endif %} /></td>
             <td>
@@ -99,6 +101,7 @@
 <div class="card card-pad" style="margin-top:16px">
   <h3 class="card-title">SSIDs</h3>
   <form method="post" action="{{ url_for('config.save_ssids', device_id=detail.row.id) }}">
+    {{ csrf_field() -}}
     <div class="field">
       <label>One SSID per line</label>
       <textarea name="ssids" rows="4" style="width:100%; padding:9px 11px; border:1px solid var(--border); border-radius:6px">{{ detail.ssids|join('\n') }}</textarea>

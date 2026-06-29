@@ -29,6 +29,7 @@
     {% if is_admin() %}
     <form method="post" action="{{ url_for('config.apply') }}"
           onsubmit="return confirm('Apply configuration to all devices?');">
+      {{ csrf_field() -}}
       <button class="btn btn-primary" type="submit"
               {% if is_read_only() %}disabled title="Read-only mode is active"{% elif not plan.has_actionable %}disabled title="No applicable devices"{% endif %}>
         Apply All
@@ -36,6 +37,7 @@
     </form>
     <form method="post" action="{{ url_for('config.revert') }}"
           onsubmit="return confirm('Discard all pending changes and restore the last applied configuration?');">
+      {{ csrf_field() -}}
       <button class="btn" type="submit">Revert All Changes</button>
     </form>
     {% endif %}
@@ -65,10 +67,12 @@
     <div class="pending-head-actions">
       <form method="post" action="{{ url_for('config.revert_device', device_id=dev.device_id) }}"
             onsubmit="return confirm('Discard pending changes for {{ dev.device_name }} and restore the last applied configuration?');">
+        {{ csrf_field() -}}
         <button class="btn" type="submit">Revert</button>
       </form>
       <form method="post" action="{{ url_for('config.apply_device', device_id=dev.device_id) }}"
             onsubmit="return confirm('Apply configuration to {{ dev.device_name }}?');">
+        {{ csrf_field() -}}
         <button class="btn btn-primary" type="submit"
                 {% if is_read_only() %}disabled title="Read-only mode is active"{% elif item and not item.supported %}disabled title="No driver available"{% endif %}>
           Apply

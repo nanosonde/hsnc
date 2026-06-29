@@ -129,6 +129,40 @@ def test_sqlite_import_rows_replaces(tmp_path):
     store.close()
 
 
+def test_sqlite_import_rows_ignores_unknown_columns(tmp_path):
+    store = SqliteRuntimeStore(tmp_path / "rt.db")
+    rows = {
+        "association_failure": [
+            {
+                "recorded_at": "2026-01-01T00:00:00+00:00",
+                "category": "A",
+                "count": 2,
+                'evil") VALUES (1); DROP TABLE association_failure; --': "x",
+            }
+        ]
+    }
+    store.import_rows(rows)
+    assert store.latest_association_failures() == [AssociationFailure("A", 2)]
+    store.close()
+
+
+def test_sqlite_import_rows_rolls_back_on_error(tmp_path):
+    import sqlite3
+    from datetime import datetime
+
+    store = SqliteRuntimeStore(tmp_path / "rt.db")
+    now = datetime(2026, 1, 1, tzinfo=UTC)
+    store.record_association_failures([AssociationFailure("A", 1)], now)
+    # recorded_at is NOT NULL: this row fails to insert *after* the table has
+    # already been cleared, so without a transaction the table would be emptied.
+    bad = {"association_failure": [{"recorded_at": None, "category": None, "count": None}]}
+    with pytest.raises(sqlite3.Error):
+        store.import_rows(bad)
+    assert store.latest_association_failures() == [AssociationFailure("A", 1)]
+    store.close()
+
+
+
 def test_jsonl_apply_history_store_roundtrips(tmp_path):
     from datetime import datetime
 

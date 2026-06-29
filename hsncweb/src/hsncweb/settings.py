@@ -18,12 +18,24 @@ class WebSettings:
     api_base_url: str = "http://127.0.0.1:8081"
     api_token: str = ""
     secret_key: str = "dev-insecure-change-me"
+    session_cookie_secure: bool = False
+
+
+DEFAULT_SECRET_KEY = "dev-insecure-change-me"
+
+
+def _env_flag(name: str, default: bool) -> bool:
+    raw = os.environ.get(name)
+    if raw is None:
+        return default
+    return raw.strip().lower() not in ("0", "false", "no", "off", "")
 
 
 def settings_from_env() -> WebSettings:
     return WebSettings(
         api_base_url=os.environ.get("HSNC_API_BASE_URL", "http://127.0.0.1:8081"),
         api_token=os.environ.get("HSNC_API_TOKEN", ""),
-        secret_key=os.environ.get("HSNC_SECRET_KEY", "dev-insecure-change-me"),
+        secret_key=os.environ.get("HSNC_SECRET_KEY", DEFAULT_SECRET_KEY),
+        session_cookie_secure=_env_flag("HSNC_SESSION_COOKIE_SECURE", False),
     )
 

@@ -10,6 +10,7 @@ with ``REGEN_GOLDEN=1 pytest tests/test_web_routes.py``.
 from __future__ import annotations
 
 import os
+import re
 from pathlib import Path
 
 import pytest
@@ -143,3 +144,53 @@ def test_backup_export_returns_zip(auth_client):
         "application/zip",
         "application/octet-stream",
     )
+
+
+# -- CSRF protection ---------------------------------------------------------
+# The golden/route fixtures above run with CSRF disabled (app.testing). These
+# build a second app with protection explicitly enabled to exercise the guard.
+
+
+@pytest.fixture
+def csrf_app(tmp_path):
+    settings = Settings(
+        config_dir=_FIXTURES,
+        data_dir=tmp_path,
+        use_mock_devices=True,
+        baseline_on_start=False,
+    )
+    api_client, container = backend_api_client(settings)
+    flask_app = create_app(api_client=api_client)
+    flask_app.config["READ_ONLY"] = False
+    flask_app.config["TESTING"] = True
+    flask_app.config["CSRF_ENABLED"] = True
+    try:
+        yield flask_app
+    finally:
+        container.close()
+
+
+def test_post_without_csrf_token_is_rejected(csrf_app):
+    client = csrf_app.test_client()
+    resp = client.post("/login", data={"username": "admin", "password": "admin"})
+    assert resp.status_code == 400
+
+
+def test_post_with_csrf_token_is_accepted(csrf_app):
+    client = csrf_app.test_client()
+    page = client.get("/login").get_data(as_text=True)
+    match = re.search(r'name="csrf_token" value="([^"]+)"', page)
+    assert match, "login form should embed a CSRF token when protection is enabled"
+    token = match.group(1)
+    resp = client.post(
+        "/login",
+        data={"username": "admin", "password": "admin", "csrf_token": token},
+        follow_redirects=False,
+    )
+    assert resp.status_code in (302, 303), resp.data
+
+
+def test_get_requests_need_no_csrf_token(csrf_app):
+    client = csrf_app.test_client()
+    assert client.get("/login").status_code == 200
+

@@ -26,6 +26,7 @@
       {% if not is_read_only() %}<span class="ro-pill">Write enabled</span>{% endif %}
       {% if is_admin() %}
       <form method="post" action="{{ url_for('dashboard.toggle_read_only') }}" class="switch-form">
+        {{ csrf_field() -}}
         <span class="switch-text">Read-only mode</span>
         <label class="switch">
           <input type="checkbox" name="enabled" onchange="this.form.submit()" {% if is_read_only() %}checked{% endif %} aria-label="Toggle read-only mode">
@@ -38,6 +39,7 @@
       <span>{{ user.display_name }}</span>
       <span class="badge-role">{{ user.role }}</span>
       <form method="post" action="{{ url_for('auth.logout') }}">
+        {{ csrf_field() -}}
         <button class="btn" type="submit">Logout</button>
       </form>
     </div>

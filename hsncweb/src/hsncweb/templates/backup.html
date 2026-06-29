@@ -19,6 +19,7 @@
       exported archive. This replaces current data.</p>
     {% if is_admin() %}
     <form method="post" action="{{ url_for('backup.import_backup') }}" enctype="multipart/form-data">
+      {{ csrf_field() -}}
       <div class="field">
         <input type="file" name="archive" accept=".zip" required />
       </div>

@@ -41,6 +41,9 @@ def role_required(*roles: str) -> Callable[[Callable[..., Any]], Callable[..., A
 
 
 def login_user(username: str, display_name: str, role: str) -> None:
+    # Make the session permanent so PERMANENT_SESSION_LIFETIME (set in the app
+    # factory) bounds how long a leaked session cookie remains valid.
+    session.permanent = True
     session["user"] = {
         "username": username,
         "display_name": display_name,

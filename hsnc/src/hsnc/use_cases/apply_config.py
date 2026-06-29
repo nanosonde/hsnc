@@ -9,6 +9,7 @@ that raise :class:`NotImplementedError`) are collected without aborting the run.
 
 from __future__ import annotations
 
+import logging
 from collections.abc import Iterable
 from datetime import UTC, datetime
 
@@ -21,6 +22,8 @@ from ..interfaces import (
     DeviceAdapterFactory,
 )
 from .config_diff import GetConfigDiff
+
+_log = logging.getLogger(__name__)
 
 
 class PlanApply:
@@ -119,6 +122,16 @@ class ApplyConfig:
                     )
                 )
             except Exception as exc:  # noqa: BLE001 - surface any adapter error per device
+                # Record the failure per-device (the run continues) but also log
+                # it with the exception type and traceback so an operator can tell
+                # an auth failure from a timeout from invalid config.
+                _log.warning(
+                    "Apply failed for device %s (%s): %s",
+                    device.id,
+                    type(exc).__name__,
+                    exc,
+                    exc_info=True,
+                )
                 results.append(
                     DeviceApplyResult(device.id, device.name, ok=False, message=str(exc))
                 )

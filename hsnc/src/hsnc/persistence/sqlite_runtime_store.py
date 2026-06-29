@@ -290,21 +290,36 @@ class SqliteRuntimeStore(RuntimeStore):
         return result
 
     def import_rows(self, tables: dict[str, list[dict]]) -> None:
+        # Atomic restore: wipe and repopulate every runtime table inside a single
+        # transaction so a malformed row leaves the previous data intact instead
+        # of an emptied table. Column names are intersected with the real schema
+        # so a hand-crafted backup archive cannot inject SQL through them.
         with self._lock:
-            for table in _RUNTIME_TABLES:
-                rows = tables.get(table, [])
-                self._conn.execute(f"DELETE FROM {table}")
-                for row in rows:
-                    columns = [c for c in row.keys() if c != "id"]
-                    if not columns:
-                        continue
-                    placeholders = ", ".join("?" for _ in columns)
-                    column_list = ", ".join(columns)
-                    self._conn.execute(
-                        f"INSERT INTO {table} ({column_list}) VALUES ({placeholders})",
-                        [row[c] for c in columns],
-                    )
-            self._conn.commit()
+            try:
+                self._conn.execute("BEGIN")
+                for table in _RUNTIME_TABLES:
+                    valid = self._table_columns(table)
+                    rows = tables.get(table, [])
+                    self._conn.execute(f"DELETE FROM {table}")
+                    for row in rows:
+                        columns = [c for c in row.keys() if c != "id" and c in valid]
+                        if not columns:
+                            continue
+                        placeholders = ", ".join("?" for _ in columns)
+                        column_list = ", ".join(columns)
+                        self._conn.execute(
+                            f"INSERT INTO {table} ({column_list}) VALUES ({placeholders})",
+                            [row[c] for c in columns],
+                        )
+                self._conn.commit()
+            except Exception:
+                self._conn.rollback()
+                raise
+
+    def _table_columns(self, table: str) -> set[str]:
+        rows = self._conn.execute(f"PRAGMA table_info({table})").fetchall()
+        return {row["name"] for row in rows}
+
 
     def close(self) -> None:
         with self._lock:

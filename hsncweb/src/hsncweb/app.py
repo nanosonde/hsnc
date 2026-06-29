@@ -8,6 +8,8 @@ device I/O, polling and persistence.
 
 from __future__ import annotations
 
+import logging
+from datetime import timedelta
 from pathlib import Path
 
 from flask import Flask, flash, redirect, render_template, request, url_for
@@ -23,10 +25,13 @@ from .blueprints import (
     devices_bp,
     topology_bp,
 )
-from .settings import WebSettings, settings_from_env
+from .csrf import init_csrf
+from .settings import DEFAULT_SECRET_KEY, WebSettings, settings_from_env
 
 _TEMPLATES = Path(__file__).resolve().parent / "templates"
 _STATIC = Path(__file__).resolve().parent / "static"
+
+_logger = logging.getLogger(__name__)
 
 
 def create_app(settings: WebSettings | None = None, api_client: ApiClient | None = None) -> Flask:
@@ -42,7 +47,26 @@ def create_app(settings: WebSettings | None = None, api_client: ApiClient | None
     app.config["SETTINGS"] = settings
     app.config["READ_ONLY"] = True
 
+    # Session-cookie hardening. HTTPONLY and SameSite=Lax are always safe and
+    # mitigate XSS cookie theft and cross-site form submission; Secure (HTTPS
+    # only) is opt-in via HSNC_SESSION_COOKIE_SECURE so plain-HTTP deployments
+    # keep working. Sessions expire so a leaked cookie does not last forever.
+    app.config.update(
+        SESSION_COOKIE_HTTPONLY=True,
+        SESSION_COOKIE_SAMESITE="Lax",
+        SESSION_COOKIE_SECURE=settings.session_cookie_secure,
+        PERMANENT_SESSION_LIFETIME=timedelta(hours=8),
+    )
+
+    if settings.secret_key == DEFAULT_SECRET_KEY:
+        _logger.warning(
+            "HSNC_SECRET_KEY is unset; using the built-in insecure development "
+            "key. Set HSNC_SECRET_KEY to a random value in any shared or "
+            "production deployment to prevent session-cookie forgery."
+        )
+
     register_template_globals(app)
+    init_csrf(app)
 
     # Read-only mode only blocks applying configuration to physical devices.
     # Re-reads, config edits and reverts remain available.
@@ -84,6 +108,11 @@ def create_app(settings: WebSettings | None = None, api_client: ApiClient | None
 
 
 def _register_error_handlers(app: Flask) -> None:
+    @app.errorhandler(400)
+    def bad_request(error):  # type: ignore[no-untyped-def]
+        message = getattr(error, "description", "Bad request") or "Bad request"
+        return render_template("error.html", code=400, message=message), 400
+
     @app.errorhandler(404)
     def not_found(_error):  # type: ignore[no-untyped-def]
         return render_template("error.html", code=404, message="Page not found"), 404

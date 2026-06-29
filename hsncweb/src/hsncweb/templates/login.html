@@ -15,6 +15,7 @@
       {% endif %}
     {% endwith %}
     <form method="post" action="{{ url_for('auth.login') }}">
+      {{ csrf_field() -}}
       <div class="field">
         <label for="username">Username</label>
         <input id="username" name="username" autocomplete="username"

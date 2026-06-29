@@ -8,6 +8,7 @@
     <div class="toolbar" style="margin-bottom:0">
       <form method="post" action="{{ url_for('devices.sync_all') }}"
             onsubmit="return confirm('Re-read configuration from all devices and update the inventory?');">
+        {{ csrf_field() -}}
         <button class="btn" type="submit" title="Read the current configuration from every device and store it">
           <svg viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" stroke-width="2"><path d="M21 12a9 9 0 1 1-2.64-6.36"/><path d="M21 3v6h-6"/></svg>
           Re-read all devices
@@ -43,6 +44,7 @@
             <div class="row-actions">
               <form method="post" action="{{ url_for('devices.sync_device', device_id=d.id) }}"
                     onsubmit="return confirm('Re-read configuration from {{ d.name }} and update the inventory?');">
+                {{ csrf_field() -}}
                 <button class="icon-btn" type="submit" title="Re-read configuration from device">
                   <svg viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" stroke-width="2"><path d="M21 12a9 9 0 1 1-2.64-6.36"/><path d="M21 3v6h-6"/></svg>
                 </button>
@@ -58,6 +60,7 @@
               </button>
               <form method="post" action="{{ url_for('devices.delete_device', device_id=d.id) }}"
                     onsubmit="return confirm('Delete {{ d.name }} from the inventory? This cannot be undone.');">
+                {{ csrf_field() -}}
                 <button class="icon-btn danger" type="submit" title="Delete device">
                   <svg viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" stroke-width="2"><path d="M3 6h18"/><path d="M8 6V4a1 1 0 0 1 1-1h6a1 1 0 0 1 1 1v2"/><path d="M19 6l-1 14a2 2 0 0 1-2 2H8a2 2 0 0 1-2-2L5 6"/><path d="M10 11v6M14 11v6"/></svg>
                 </button>
