@@ -1,18 +1,20 @@
-# Mock OpenWrt device (UCI + ubus over SSH)
+# Mock OpenWrt device (UCI + ubus over SSH; Prometheus monitoring)
 
 A throwaway container that behaves like an OpenWrt router/AP for the purposes of the
-hsnc OpenWrt SSH adapter. It runs a real `sshd` whose shell has fake `uci` and
-`ubus` commands on `PATH`, backed by a persisted UCI state file.
+hsnc OpenWrt drivers. It serves **both planes**: a real `sshd` whose shell has
+fake `uci` and `ubus` commands on `PATH` (the **configuration plane**), and a fake
+Prometheus node-exporter on `:9100` (the **monitoring plane**, never SSH).
 
 This is a **device simulator**, not part of the application. The real
 `OpenWrtSshAdapter` SSHes into it and runs the same `uci`/`ubus` commands the
-`UciConfigRenderer` emits.
+`UciConfigRenderer` emits; the real `OpenWrtPrometheusMonitoringProvider` scrapes
+its `/metrics` endpoint.
 
 ## Build & run (standalone)
 
 ```sh
 docker build -t mock-openwrt fakes/openwrt
-docker run --rm -p 2201:22 --name mock-openwrt mock-openwrt
+docker run --rm -p 2201:22 -p 9100:9100 --name mock-openwrt mock-openwrt
 ```
 
 Or via the bundled compose file (recommended): see `fakes/README.md`.
@@ -46,6 +48,26 @@ Credentials come from env: `MOCK_SSH_USER` (default `root`), `MOCK_SSH_PASSWORD`
 Anonymous sections support both positive and negative indices, e.g.
 `network.@bridge-vlan[-1]` references the most recently added bridge-vlan — exactly
 what the renderer uses after `uci add network bridge-vlan`.
+
+## Monitoring plane (Prometheus, never SSH)
+
+A fake `prometheus-node-exporter`-style endpoint listens on `:9100/metrics` and
+exposes exactly the metrics the `OpenWrtPrometheusMonitoringProvider` parses:
+
+| Metric | Purpose |
+| --- | --- |
+| `node_time_seconds`, `node_boot_time_seconds` | device uptime |
+| `node_uname_info{machine=...,release=...}` | model / firmware |
+| `wifi_stations_signal_dbm{vap=...,mac=...}` | one wireless client per DHCP lease |
+
+The wireless-station MACs come from the same `dhcp.leases` the SSH `ubus iwinfo
+assoclist` surface reports, so the two planes agree. Boot time is recorded once
+per container start. Set `MOCK_PROMETHEUS_TOKEN` to require an
+`Authorization: Bearer <token>` header (off by default).
+
+```sh
+curl -s http://localhost:9100/metrics | grep -E 'node_uname_info|mac='
+```
 
 ## State, seeding & reset
 

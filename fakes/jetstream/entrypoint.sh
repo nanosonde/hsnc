@@ -3,12 +3,17 @@
 # - seeds the persisted running/startup config on first boot (idempotent)
 # - sets the admin user's login shell to the fake CLI
 # - (re)applies SSH credentials from env
-# - runs sshd in the foreground
+# - configures + starts the SNMPv3 agent (monitoring plane) in the background
+# - runs sshd in the foreground (configuration plane)
 set -eu
 
 STATE_DIR="${MOCK_STATE_DIR:-/var/lib/mockdev}"
 SSH_USER="${MOCK_SSH_USER:-admin}"
 SSH_PASSWORD="${MOCK_SSH_PASSWORD:-admin}"
+SNMP_USER="${MOCK_SNMP_USER:-hsncmon}"
+SNMP_AUTH_KEY="${MOCK_SNMP_AUTH_KEY:-hsncauth123}"
+SNMP_PRIV_KEY="${MOCK_SNMP_PRIV_KEY:-hsncpriv123}"
+SNMP_MODEL="${MOCK_MODEL:-TL-SG2210P}"
 
 mkdir -p "$STATE_DIR"
 
@@ -48,5 +53,31 @@ Match User ${SSH_USER}
     ForceCommand /usr/bin/jetstream-cli
 EOF
 fi
+
+# --- Monitoring plane: SNMPv3 agent (never SSH) -----------------------------
+# sysName mirrors the switch hostname; sysDescr mirrors the CLI device model so
+# the config and monitoring planes stay coherent. The FDB (MAC table) subtree is
+# delegated to the fake `pass` backend.
+SNMP_SYSNAME="$(python3 -c "import json;print(json.load(open('$STATE_DIR/running.json')).get('hostname','Switch'))" 2>/dev/null || echo Switch)"
+cat > /etc/snmp/snmpd.conf <<EOF
+rouser ${SNMP_USER} priv
+sysDescr ${SNMP_MODEL}
+sysName ${SNMP_SYSNAME}
+sysServices 2
+pass .1.3.6.1.2.1.17.4.3.1.2 /usr/bin/fdb-pass
+EOF
+
+# Create the SNMPv3 USM user once; snmpd consumes the createUser line on start
+# and persists the resulting key material in this file.
+mkdir -p /var/lib/net-snmp
+if ! grep -qs "\"${SNMP_USER}\"" /var/lib/net-snmp/snmpd.conf 2>/dev/null \
+    && ! grep -qs "createUser ${SNMP_USER} " /var/lib/net-snmp/snmpd.conf 2>/dev/null; then
+    echo "createUser ${SNMP_USER} SHA \"${SNMP_AUTH_KEY}\" AES \"${SNMP_PRIV_KEY}\"" \
+        >> /var/lib/net-snmp/snmpd.conf
+fi
+
+# Background the agent (the listen address is given only here to avoid a double
+# bind); sshd then runs in the foreground as the container's main process.
+snmpd -Lo -f udp:161 &
 
 exec /usr/sbin/sshd -D -e

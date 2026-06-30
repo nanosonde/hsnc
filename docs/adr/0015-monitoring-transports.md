@@ -39,5 +39,6 @@ stdlib `urllib`.
   (ADR 0009); tests use fake transports.
 - The OpenWrt/JetStream SSH monitoring providers are removed; the SSH adapters
   keep owning the configuration plane only.
-- Dev/test still use mock providers (ADR 0013); the fake device containers are
-  SSH-only, so live Prometheus/SNMP polling against them is out of scope.
+- Dev/test still use mock providers (ADR 0013); the fake device containers also
+  serve the monitoring plane (OpenWrt a Prometheus exporter on `:9100`, JetStream
+  an SNMPv3 agent on `161/udp`) so live polling can be exercised end to end.

@@ -2,7 +2,8 @@
 # Entrypoint for the mock OpenWrt device.
 # - seeds the persisted UCI/DHCP state on first boot (idempotent)
 # - (re)applies SSH credentials from env
-# - runs sshd in the foreground
+# - starts the Prometheus node-exporter (monitoring plane) in the background
+# - runs sshd in the foreground (configuration plane)
 set -eu
 
 STATE_DIR="${MOCK_STATE_DIR:-/var/lib/mockdev}"
@@ -47,5 +48,11 @@ fi
 # Allow password + root login for the mock.
 sed -i 's/^#\?PermitRootLogin.*/PermitRootLogin yes/' /etc/ssh/sshd_config
 sed -i 's/^#\?PasswordAuthentication.*/PasswordAuthentication yes/' /etc/ssh/sshd_config
+
+# Record a fresh boot time so the exporter reports a sane uptime, then start the
+# monitoring plane (Prometheus node-exporter on :9100) in the background.
+date +%s > "$STATE_DIR/boot_time"
+chown "$SSH_USER" "$STATE_DIR/boot_time"
+node-exporter &
 
 exec /usr/sbin/sshd -D -e

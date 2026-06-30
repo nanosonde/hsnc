@@ -1,10 +1,13 @@
 # Mock network devices for hsnc.
 #
-# Brings up two SSH-accessible device simulators that the real device adapters
-# (OpenWrtSshAdapter / JetStreamCliAdapter) can target:
+# Brings up two device simulators that the real device drivers can target on two
+# independent planes: SSH for configuration, and a non-SSH transport for
+# monitoring (Prometheus for OpenWrt, SNMPv3 for JetStream).
 #
 #   mock-openwrt    OpenWrt router/AP  -> ssh -p 2201 root@localhost   (pw: openwrt)
+#                                      -> http://localhost:9100/metrics (Prometheus)
 #   mock-jetstream  JetStream switch   -> ssh -p 2202 admin@localhost  (pw: admin)
+#                                      -> snmp udp://localhost:1161     (SNMPv3)
 #
 # Usage:
 #   docker compose -f fakes/docker-compose.yml up -d --build
@@ -18,12 +21,14 @@ services:
     container_name: mock-openwrt
     hostname: mock-openwrt
     ports:
-      - "2201:22"
+      - "2201:22"       # configuration plane (SSH)
+      - "9100:9100"     # monitoring plane (Prometheus exporter)
     environment:
       MOCK_SSH_USER: root
       MOCK_SSH_PASSWORD: ${MOCK_OPENWRT_PASSWORD:-openwrt}
       MOCK_MODEL: "TP-Link ER605 (mock)"
       MOCK_BOARD: "tplink,er605"
+      # MOCK_PROMETHEUS_TOKEN: ""   # set to require a bearer token on /metrics
       # MOCK_SSH_PUBKEY: "ssh-ed25519 AAAA... user@host"
     volumes:
       - openwrt-state:/var/lib/mockdev
@@ -36,12 +41,17 @@ services:
     container_name: mock-jetstream
     hostname: mock-jetstream
     ports:
-      - "2202:22"
+      - "2202:22"          # configuration plane (SSH)
+      - "1161:161/udp"     # monitoring plane (SNMPv3)
     environment:
       MOCK_SSH_USER: admin
       MOCK_SSH_PASSWORD: ${MOCK_JETSTREAM_PASSWORD:-admin}
       MOCK_MODEL: "TL-SG2210P"
       MOCK_MAC: "00-11-22-33-44-02"
+      # SNMPv3 USM credentials the controller must match (HSNC_SNMP_*).
+      MOCK_SNMP_USER: ${MOCK_SNMP_USER:-hsncmon}
+      MOCK_SNMP_AUTH_KEY: ${MOCK_SNMP_AUTH_KEY:-hsncauth123}
+      MOCK_SNMP_PRIV_KEY: ${MOCK_SNMP_PRIV_KEY:-hsncpriv123}
       # MOCK_SSH_PUBKEY: "ssh-ed25519 AAAA... user@host"
     volumes:
       - jetstream-state:/var/lib/mockdev
@@ -64,6 +74,12 @@ services:
     environment:
       HSNC_SECRET_KEY: dev-secret-change-me
       HSNC_USE_MOCK_DEVICES: "0"
+      # Monitoring plane (non-SSH): match the mock SNMPv3 USM credentials so the
+      # JetStreamSnmpMonitoringProvider can poll mock-jetstream. The OpenWrt
+      # Prometheus exporter needs no token by default.
+      HSNC_SNMP_USER: ${MOCK_SNMP_USER:-hsncmon}
+      HSNC_SNMP_AUTH_KEY: ${MOCK_SNMP_AUTH_KEY:-hsncauth123}
+      HSNC_SNMP_PRIV_KEY: ${MOCK_SNMP_PRIV_KEY:-hsncpriv123}
     ports:
       - "8080:8080"
     networks:

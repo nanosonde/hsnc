@@ -1,19 +1,24 @@
 # Mock devices
 
 Controllable simulators of the network devices hsnc manages, each as its own
-Docker container reachable over **SSH**. They exist so the real device adapters can be
-developed and tested against realistic SSH targets without physical hardware.
+Docker container. They serve **both planes** so the real device drivers can be
+developed and tested without physical hardware: the **configuration plane** over
+SSH, and the **monitoring plane** over a non-SSH transport fixed per platform
+(Prometheus for OpenWrt, SNMPv3 for JetStream).
 
-| Mock | Emulates | Transport | Host port | Login |
+| Mock | Emulates | Config plane (SSH) | Monitoring plane | Login |
 | --- | --- | --- | --- | --- |
-| [`openwrt/`](./openwrt) | OpenWrt router / AP | `uci` + `ubus` over SSH | `2201` | `root` / `openwrt` |
-| [`jetstream/`](./jetstream) | TP-Link JetStream switch | JetStream CLI over SSH | `2202` | `admin` / `admin` |
+| [`openwrt/`](./openwrt) | OpenWrt router / AP | `uci` + `ubus`, port `2201` | Prometheus exporter, port `9100` | `root` / `openwrt` |
+| [`jetstream/`](./jetstream) | TP-Link JetStream switch | JetStream CLI, port `2202` | SNMPv3, UDP port `1161` | `admin` / `admin` |
 
-Each is a **device simulator**, not part of the app. They emulate exactly the command
-surface emitted and consumed by the renderers and the SSH adapters:
+Each is a **device simulator**, not part of the app. They emulate exactly the
+command surface emitted and consumed by the renderers, the SSH adapters, and the
+monitoring providers:
 
-- `UciConfigRenderer` / `OpenWrtSshAdapter` ⟷ `mock-openwrt`
-- `JetStreamCliRenderer` / `JetStreamCliAdapter` ⟷ `mock-jetstream`
+- `UciConfigRenderer` / `OpenWrtSshAdapter` ⟷ `mock-openwrt` (SSH)
+- `OpenWrtPrometheusMonitoringProvider` ⟷ `mock-openwrt` (`:9100/metrics`)
+- `JetStreamCliRenderer` / `JetStreamCliAdapter` ⟷ `mock-jetstream` (SSH)
+- `JetStreamSnmpMonitoringProvider` ⟷ `mock-jetstream` (SNMPv3 `161/udp`)
 
 ## Quickstart
 
@@ -29,6 +34,11 @@ ssh -p 2201 root@localhost 'uci set network.lan.ipaddr=10.0.0.1; uci commit; uci
 ssh -p 2202 admin@localhost 'show running-config'
 printf 'enable\nconfigure\nvlan 99\nname lab\nend\ncopy running-config startup-config\nshow running-config\n' \
   | ssh -p 2202 admin@localhost
+
+# Monitoring plane (never SSH): scrape OpenWrt metrics, poll JetStream over SNMPv3
+curl -s http://localhost:9100/metrics | grep -E 'node_uname_info|mac='
+docker exec mock-jetstream snmpget -v3 -l authPriv -u hsncmon \
+  -a SHA -A hsncauth123 -x AES -X hsncpriv123 localhost 1.3.6.1.2.1.1.1.0
 
 # Stop (keep state) / wipe state
 docker compose -f fakes/docker-compose.yml down
@@ -80,13 +90,34 @@ The backend reads the live baseline on start and polls the devices; run
 
 Set via env in `docker-compose.yml` (or `.env`):
 
-- `MOCK_OPENWRT_PASSWORD`, `MOCK_JETSTREAM_PASSWORD` — override default passwords
+- `MOCK_OPENWRT_PASSWORD`, `MOCK_JETSTREAM_PASSWORD` — override default SSH passwords
 - `MOCK_SSH_PUBKEY` per service — enable public-key auth
+- `MOCK_SNMP_USER`, `MOCK_SNMP_AUTH_KEY`, `MOCK_SNMP_PRIV_KEY` — the SNMPv3 USM
+  user the JetStream mock accepts (defaults `hsncmon` / `hsncauth123` /
+  `hsncpriv123`, SHA auth + AES priv, `authPriv`). The controller must match
+  these via `HSNC_SNMP_USER` / `HSNC_SNMP_AUTH_KEY` / `HSNC_SNMP_PRIV_KEY`.
+- `MOCK_PROMETHEUS_TOKEN` on the OpenWrt mock — when set, `/metrics` requires an
+  `Authorization: Bearer <token>` header (matching `HSNC_PROMETHEUS_TOKEN`).
+
+## The two planes
+
+The **configuration plane** is SSH only (`uci`/`ubus`, JetStream CLI). The
+**monitoring plane** never uses SSH:
+
+- **OpenWrt** runs a fake `prometheus-node-exporter`-style endpoint on `:9100`
+  exposing `node_*` metrics (uptime, `node_uname_info`) and per-station
+  `wifi_stations_*` metrics derived from the same DHCP leases the SSH `ubus`
+  surface reports — so both planes stay coherent.
+- **JetStream** runs `snmpd` (SNMPv3, `authPriv`) answering MIB-II scalars
+  (`sysDescr`/`sysUpTime`/`sysName`) and a BRIDGE-MIB forwarding table
+  (`dot1dTpFdbPort`) that mirrors `show mac address-table`.
 
 ## Verifying the mocks
 
-`smoke_test.sh` builds, starts, and drives both mocks over real SSH (using paramiko),
-then tears everything down:
+`smoke_test.sh` builds, starts, and drives both mocks across both planes — the
+configuration plane over real SSH (using paramiko) and the monitoring plane via
+Prometheus (`/metrics`) and SNMPv3 (`snmpget`/`snmpwalk`) — then tears everything
+down:
 
 ```sh
 fakes/smoke_test.sh

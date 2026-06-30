@@ -1,5 +1,7 @@
 #!/usr/bin/env bash
-# Build, start, and drive both device mocks over real SSH, then tear down.
+# Build, start, and drive both device mocks across BOTH planes, then tear down:
+#   * configuration plane over real SSH (paramiko)
+#   * monitoring plane over Prometheus (OpenWrt) and SNMPv3 (JetStream)
 # Requires: docker + docker compose, and `pip install paramiko`.
 set -euo pipefail
 
@@ -21,7 +23,7 @@ import socket
 import sys
 import time
 
-for port in (2201, 2202):
+for port in (2201, 2202, 9100):
     deadline = time.time() + 60
     while time.time() < deadline:
         try:
@@ -31,7 +33,7 @@ for port in (2201, 2202):
             time.sleep(1)
     else:
         sys.exit(f"timeout waiting for port {port}")
-print("ssh ports are open")
+print("ssh + metrics ports are open")
 PY
 
 echo "--- driving mocks (paramiko) ---"
@@ -87,12 +89,48 @@ if "vlan 99" not in running:
     failures.append("jetstream: pushed vlan 99 not in running-config")
 js.close()
 
+# --- OpenWrt monitoring plane (Prometheus, never SSH) -----------------------
+import urllib.request
+
+try:
+    metrics = urllib.request.urlopen(
+        "http://127.0.0.1:9100/metrics", timeout=10
+    ).read().decode()
+except Exception as exc:  # noqa: BLE001 - report as a smoke failure
+    failures.append(f"openwrt: prometheus scrape failed: {exc}")
+    metrics = ""
+if "node_uname_info" not in metrics:
+    failures.append("openwrt: /metrics missing node_uname_info")
+if "mac=" not in metrics:
+    failures.append("openwrt: /metrics missing wifi station mac labels")
+
 if failures:
     print("SMOKE TEST FAILED:")
     for f in failures:
         print("  -", f)
     sys.exit(1)
-print("SMOKE TEST PASSED")
+print("config + prometheus checks passed")
 PY
 
+echo "--- driving monitoring plane: jetstream SNMPv3 ---"
+SNMP_USER="${MOCK_SNMP_USER:-hsncmon}"
+SNMP_AUTH="${MOCK_SNMP_AUTH_KEY:-hsncauth123}"
+SNMP_PRIV="${MOCK_SNMP_PRIV_KEY:-hsncpriv123}"
+SNMP_ARGS=(-v3 -l authPriv -u "$SNMP_USER" -a SHA -A "$SNMP_AUTH" -x AES -X "$SNMP_PRIV" localhost)
+
+sys_descr="$(docker exec mock-jetstream snmpget "${SNMP_ARGS[@]}" 1.3.6.1.2.1.1.1.0 2>&1 || true)"
+echo "$sys_descr"
+if ! grep -q "TL-SG2210P" <<<"$sys_descr"; then
+    echo "SMOKE TEST FAILED: jetstream SNMP sysDescr missing TL-SG2210P"
+    exit 1
+fi
+
+fdb="$(docker exec mock-jetstream snmpwalk "${SNMP_ARGS[@]}" 1.3.6.1.2.1.17.4.3.1.2 2>&1 || true)"
+echo "$fdb"
+if [ "$(grep -c "INTEGER" <<<"$fdb")" -lt 1 ]; then
+    echo "SMOKE TEST FAILED: jetstream SNMP FDB walk returned no entries"
+    exit 1
+fi
+
+echo "SMOKE TEST PASSED"
 echo "--- done ---"

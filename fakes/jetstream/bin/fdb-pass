@@ -1,0 +1,76 @@
+#!/usr/bin/env python3
+"""net-snmp ``pass`` backend serving the BRIDGE-MIB forwarding database.
+
+This is part of the JetStream switch's **monitoring plane** (SNMPv3, never SSH).
+``snmpd`` delegates the ``dot1dTpFdbPort`` subtree
+(``.1.3.6.1.2.1.17.4.3.1.2``) to this script so the real
+``JetStreamSnmpMonitoringProvider`` can walk the MAC address table and report
+connected (wired) clients.
+
+The entries mirror the fake CLI's ``show mac address-table`` output so the
+configuration and monitoring planes stay coherent. Each forwarding entry maps a
+station MAC (encoded as the trailing six OID octets) to a bridge port number.
+
+net-snmp ``pass`` protocol (see snmpd.conf(5)):
+  * GET:     argv ``-g <oid>``  -> print ``<oid>\\n<type>\\n<value>`` or nothing
+  * GETNEXT: argv ``-n <oid>``  -> print the lexicographically next entry
+"""
+from __future__ import annotations
+
+import sys
+
+BASE = "1.3.6.1.2.1.17.4.3.1.2"
+
+# (MAC, bridge port) — matches `show mac address-table` in jetstream-cli.
+_FDB = [
+    ("00-11-22-aa-bb-01", 1),
+    ("00-11-22-aa-bb-02", 2),
+    ("00-11-22-aa-bb-03", 3),
+    ("a4-83-e7-00-33-44", 8),
+]
+
+
+def _entries() -> list[tuple[tuple[int, ...], int]]:
+    """Return sorted ``(full_oid_tuple, port)`` pairs for the FDB subtree."""
+    base = tuple(int(p) for p in BASE.split("."))
+    rows = []
+    for mac, port in _FDB:
+        octets = tuple(int(o, 16) for o in mac.replace(":", "-").split("-"))
+        rows.append((base + octets, port))
+    rows.sort()
+    return rows
+
+
+def _parse(oid: str) -> tuple[int, ...]:
+    return tuple(int(p) for p in oid.strip(".").split(".") if p != "")
+
+
+def _fmt(oid: tuple[int, ...]) -> str:
+    return "." + ".".join(str(p) for p in oid)
+
+
+def _emit(oid: tuple[int, ...], port: int) -> None:
+    sys.stdout.write(f"{_fmt(oid)}\ninteger\n{port}\n")
+
+
+def main(argv: list[str]) -> int:
+    if len(argv) < 2:
+        return 0
+    mode, oid = argv[0], argv[1]
+    entries = _entries()
+    requested = _parse(oid)
+    if mode == "-g":
+        for full, port in entries:
+            if full == requested:
+                _emit(full, port)
+                break
+    elif mode == "-n":
+        for full, port in entries:
+            if full > requested:
+                _emit(full, port)
+                break
+    return 0
+
+
+if __name__ == "__main__":
+    raise SystemExit(main(sys.argv[1:]))

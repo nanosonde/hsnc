@@ -1,0 +1,126 @@
+#!/usr/bin/env python3
+"""Minimal fake Prometheus node-exporter for the mock OpenWrt device.
+
+This is the device's **monitoring plane** (the monitoring plane never uses SSH).
+It serves a Prometheus text-exposition endpoint on ``:9100/metrics`` shaped like
+``prometheus-node-exporter-lua`` so the real
+``OpenWrtPrometheusMonitoringProvider`` can scrape live status and clients:
+
+  * ``node_time_seconds`` / ``node_boot_time_seconds`` -> uptime
+  * ``node_uname_info{machine=...,release=...}``       -> model / firmware
+  * ``wifi_stations_signal_dbm{vap=...,mac=...}``       -> wireless clients
+
+Wireless stations are derived from the same persisted DHCP leases the fake
+``ubus iwinfo assoclist`` uses, so the config and monitoring planes stay
+coherent. Boot time is recorded once per container start.
+
+An optional bearer token may be required by setting ``MOCK_PROMETHEUS_TOKEN``;
+when unset the endpoint is open (matching an exporter with no auth).
+"""
+from __future__ import annotations
+
+import os
+import time
+from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
+
+STATE_DIR = os.environ.get("MOCK_STATE_DIR", "/var/lib/mockdev")
+LEASES_FILE = os.path.join(STATE_DIR, "dhcp.leases")
+BOOT_FILE = os.path.join(STATE_DIR, "boot_time")
+LISTEN_PORT = int(os.environ.get("MOCK_METRICS_PORT", "9100"))
+MACHINE = os.environ.get("MOCK_BOARD", "tplink,er605")
+RELEASE = os.environ.get("MOCK_RELEASE", "23.05.3")
+HOSTNAME = os.environ.get("HOSTNAME", "mock-openwrt")
+TOKEN = os.environ.get("MOCK_PROMETHEUS_TOKEN", "")
+
+
+def _boot_time() -> float:
+    """Return a stable boot timestamp for this container instance."""
+    try:
+        with open(BOOT_FILE, encoding="utf-8") as handle:
+            return float(handle.read().strip())
+    except (OSError, ValueError):
+        now = time.time()
+        try:
+            with open(BOOT_FILE, "w", encoding="utf-8") as handle:
+                handle.write(str(now))
+        except OSError:
+            pass
+        return now
+
+
+def _lease_macs() -> list[str]:
+    path = LEASES_FILE if os.path.exists(LEASES_FILE) else "/tmp/dhcp.leases"
+    macs: list[str] = []
+    if not os.path.exists(path):
+        return macs
+    try:
+        with open(path, encoding="utf-8") as handle:
+            for raw in handle:
+                parts = raw.split()
+                if len(parts) >= 4:
+                    macs.append(parts[1].lower())
+    except OSError:
+        pass
+    return macs
+
+
+def render_metrics() -> str:
+    now = time.time()
+    boot = _boot_time()
+    lines = [
+        "# HELP node_time_seconds System time in seconds since epoch (1970).",
+        "# TYPE node_time_seconds gauge",
+        f"node_time_seconds {now:.3f}",
+        "# HELP node_boot_time_seconds Node boot time, in unixtime.",
+        "# TYPE node_boot_time_seconds gauge",
+        f"node_boot_time_seconds {boot:.3f}",
+        "# HELP node_uname_info Labeled system information as provided by uname.",
+        "# TYPE node_uname_info gauge",
+        (
+            "node_uname_info{"
+            f'machine="{MACHINE}",nodename="{HOSTNAME}",release="{RELEASE}",'
+            'sysname="Linux"} 1'
+        ),
+        "# HELP wifi_stations_signal_dbm Wireless station signal strength (dBm).",
+        "# TYPE wifi_stations_signal_dbm gauge",
+    ]
+    for index, mac in enumerate(_lease_macs()):
+        vap = "wlan0" if index % 2 == 0 else "wlan1"
+        lines.append(
+            f'wifi_stations_signal_dbm{{vap="{vap}",ifname="{vap}",mac="{mac}"}} -55'
+        )
+    return "\n".join(lines) + "\n"
+
+
+class _Handler(BaseHTTPRequestHandler):
+    def _authorized(self) -> bool:
+        if not TOKEN:
+            return True
+        header = self.headers.get("Authorization", "")
+        return header == f"Bearer {TOKEN}"
+
+    def do_GET(self) -> None:  # noqa: N802 - BaseHTTPRequestHandler API
+        if self.path.rstrip("/") not in ("/metrics", ""):
+            self.send_error(404, "Not Found")
+            return
+        if not self._authorized():
+            self.send_error(401, "Unauthorized")
+            return
+        body = render_metrics().encode("utf-8")
+        self.send_response(200)
+        self.send_header("Content-Type", "text/plain; version=0.0.4; charset=utf-8")
+        self.send_header("Content-Length", str(len(body)))
+        self.end_headers()
+        self.wfile.write(body)
+
+    def log_message(self, *args) -> None:  # noqa: D401 - silence default logging
+        return
+
+
+def main() -> None:
+    server = ThreadingHTTPServer(("0.0.0.0", LISTEN_PORT), _Handler)  # noqa: S104
+    server.serve_forever()
+
+
+if __name__ == "__main__":
+    main()
