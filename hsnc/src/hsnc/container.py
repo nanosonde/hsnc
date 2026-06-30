@@ -60,6 +60,7 @@ class Settings:
     poll_interval_seconds: int = 30
     retention_days: int = 30
     baseline_on_start: bool = True
+    ssh_idle_timeout_seconds: int = 300
     ssh: SshConnectionSettings = field(default_factory=SshConnectionSettings)
 
     @property

@@ -1,7 +1,8 @@
 """Background lifecycle for the REST backend process.
 
-Owns the backend's non-HTTP duties: keep a persistent SSH connection warm to
-every device, read the baseline once on boot (when enabled), and run a periodic
+Owns the backend's non-HTTP duties: supervise on-demand SSH connections (opened
+lazily on the first config command, kept warm for repeat requests and reaped
+once idle), read the baseline once on boot (when enabled), and run a periodic
 poll loop that scrapes live state into the runtime store. In mock mode no real
 connections are opened.
 
@@ -37,6 +38,7 @@ class BackendRuntime:
             self._pool = ConnectionPool(
                 runner_for=lambda device: registry.get(resolver.resolve(device)),
                 devices_provider=container.profiles.list_devices,
+                idle_timeout=self._settings.ssh_idle_timeout_seconds,
             )
 
     @property

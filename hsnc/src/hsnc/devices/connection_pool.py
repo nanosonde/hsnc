@@ -1,14 +1,16 @@
-"""The device connection pool.
+"""The device connection manager.
 
-Keeps one persistent (SSH) connection open to every configured device
-**at all times**, each supervised by its own thread so a fault on one device
-never affects another. When a connection drops, only that device's supervisor
-reconnects, using exponential backoff. This is what lets the web app stay fast:
-connections live here, warm and ready, instead of being opened inside a request.
+SSH is the configuration plane only, so connections are **demand-driven**: a
+device's connection is opened lazily on the first config command (by the warm
+runner in :class:`~.ssh_transport.PersistentRunnerRegistry`), then kept warm for
+repeat config requests and gracefully closed once it has been idle past the
+configured window. Each device is supervised by its own thread so a fault on one
+device never affects another.
 
-The pool does not execute device commands itself — adapters do, reusing the warm
-runners via the :class:`~.ssh_transport.PersistentRunnerRegistry`. The pool's job
-is purely to *establish and maintain* the connections and report their health.
+The manager does not open or execute device commands itself — adapters do that,
+lazily, when a config requirement arrives. The manager's job is to keep an
+already-open connection warm (periodic keepalive) and to reap it once idle,
+reporting connection health for ``/health``.
 """
 
 from __future__ import annotations
@@ -26,11 +28,19 @@ _log = logging.getLogger("hsnc.devices.pool")
 
 
 class SupervisedRunner(Protocol):
-    """The subset of a persistent runner the pool supervises."""
+    """The subset of a persistent runner the manager supervises.
 
-    def ensure_connected(self) -> None: ...
+    The manager never opens a connection itself: it only keeps an already-open
+    one warm (:meth:`keepalive`) and closes it once idle (:meth:`close_idle`).
+    """
+
+    def is_alive(self) -> bool: ...
+
+    def idle_seconds(self) -> float: ...
 
     def keepalive(self) -> bool: ...
+
+    def close_idle(self) -> None: ...
 
     def close(self) -> None: ...
 
@@ -54,22 +64,22 @@ class ConnectionState:
 
 
 class ConnectionPool:
-    """Maintains warm SSH connections to all devices, one thread each."""
+    """Keeps demand-opened SSH connections warm and reaps idle ones, one thread each."""
 
     def __init__(
         self,
         runner_for: RunnerFor,
         devices_provider: Callable[[], list[Device]],
         *,
+        idle_timeout: float = 300.0,
         keepalive_interval: float = 30.0,
-        backoff_initial: float = 1.0,
-        backoff_max: float = 60.0,
     ) -> None:
         self._runner_for = runner_for
         self._devices_provider = devices_provider
-        self._keepalive_interval = keepalive_interval
-        self._backoff_initial = backoff_initial
-        self._backoff_max = backoff_max
+        self._idle_timeout = idle_timeout
+        # Scan at least as often as the idle window so a connection is reaped
+        # promptly once idle, even when the window is shorter than a keepalive.
+        self._scan_interval = max(0.01, min(keepalive_interval, idle_timeout))
         self._stop = threading.Event()
         self._threads: list[threading.Thread] = []
         self._states: dict[str, ConnectionState] = {}
@@ -121,39 +131,30 @@ class ConnectionPool:
     # -- supervisor -------------------------------------------------------
 
     def _supervise(self, device: Device, state: ConnectionState) -> None:
-        """Keep one device's connection alive until asked to stop."""
+        """Keep one device's connection warm and reap it once idle.
+
+        The connection is opened on demand by the adapter on the first config
+        command, not here. While it is open this thread keepalives it so the
+        link stays warm for repeat requests, and closes it gracefully once it
+        has been idle past the configured window.
+        """
         runner = self._runner_for(device)
-        backoff = self._backoff_initial
         while not self._stop.is_set():
             try:
-                if state.connected:
-                    healthy = runner.keepalive()
+                if runner.is_alive():
+                    if runner.idle_seconds() >= self._idle_timeout:
+                        runner.close_idle()
+                        _log.info("Closed idle connection to %s", device.id)
+                        self._mark(state, connected=False, error="")
+                    elif runner.keepalive():
+                        self._mark(state, connected=True, error="")
+                    else:
+                        self._mark(state, connected=False, error="keepalive failed")
                 else:
-                    runner.ensure_connected()
-                    healthy = True
+                    self._mark(state, connected=False, error="")
             except Exception as exc:  # noqa: BLE001 - isolate per-device faults
-                healthy = False
                 self._mark(state, connected=False, error=str(exc))
-            else:
-                if healthy:
-                    if not state.connected:
-                        _log.info("Connected to %s", device.id)
-                    self._mark(state, connected=True, error="")
-                    backoff = self._backoff_initial
-                else:
-                    self._mark(state, connected=False, error="keepalive failed")
-
-            if healthy:
-                self._stop.wait(self._keepalive_interval)
-            else:
-                _log.warning(
-                    "Device %s unreachable (%s); retrying in %.0fs",
-                    device.id,
-                    state.last_error or "unknown",
-                    backoff,
-                )
-                self._stop.wait(backoff)
-                backoff = min(backoff * 2, self._backoff_max)
+            self._stop.wait(self._scan_interval)
 
         try:
             runner.close()
@@ -166,5 +167,7 @@ class ConnectionPool:
                 state.last_change = datetime.now(UTC).isoformat()
             state.connected = connected
             state.last_error = error
-            if not connected:
+            # Count only genuine faults (a non-empty error); a benign
+            # not-yet-connected or graceful idle close is not a failure.
+            if error:
                 state.failures += 1

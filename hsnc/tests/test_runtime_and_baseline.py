@@ -61,49 +61,105 @@ class _Factory(DeviceAdapterFactory):
 # -- connection pool -----------------------------------------------------
 
 
-class _FlakyRunner:
-    """Fails to connect for the first ``fail_times`` attempts, then succeeds."""
+class _LazyRunner:
+    """Models a persistent runner whose connection is opened on demand.
 
-    def __init__(self, fail_times: int) -> None:
-        self._remaining = fail_times
+    The pool never opens it; a test simulates a config command via :meth:`connect`.
+    ``idle`` is the reported idle time, controllable so the reaper can be exercised.
+    """
+
+    def __init__(self) -> None:
+        self._alive = False
+        self.idle = 0.0
+        self.keepalives = 0
+        self.closed_idle = False
         self.closed = False
 
-    def ensure_connected(self) -> None:
-        if self._remaining > 0:
-            self._remaining -= 1
-            raise OSError("connection refused")
+    def connect(self) -> None:
+        self._alive = True
+
+    def is_alive(self) -> bool:
+        return self._alive
+
+    def idle_seconds(self) -> float:
+        return self.idle
 
     def keepalive(self) -> bool:
+        self.keepalives += 1
         return True
+
+    def close_idle(self) -> None:
+        self.closed_idle = True
+        self._alive = False
 
     def close(self) -> None:
         self.closed = True
+        self._alive = False
 
 
-def test_connection_pool_reconnects_after_failure():
+def _run_pool_until(pool, predicate, timeout=3.0):
+    pool.start()
+    try:
+        deadline = time.monotonic() + timeout
+        while time.monotonic() < deadline:
+            if predicate():
+                break
+            time.sleep(0.01)
+    finally:
+        pool.stop()
+
+
+def test_connection_pool_does_not_open_connections():
+    """The manager is demand-driven: it never opens a connection itself."""
     device = _switch()
-    runner = _FlakyRunner(fail_times=2)
+    runner = _LazyRunner()
     pool = ConnectionPool(
         runner_for=lambda d: runner,
         devices_provider=lambda: [device],
+        idle_timeout=10.0,
         keepalive_interval=0.02,
-        backoff_initial=0.01,
-        backoff_max=0.05,
     )
-    pool.start()
-    try:
-        deadline = time.monotonic() + 3.0
-        while time.monotonic() < deadline:
-            snap = pool.snapshot()
-            if snap and snap[0]["connected"]:
-                break
-            time.sleep(0.02)
-        snap = pool.snapshot()
-        assert snap[0]["connected"] is True
-        assert snap[0]["failures"] >= 1
-    finally:
-        pool.stop()
-    assert runner.closed is True
+    _run_pool_until(pool, lambda: False, timeout=0.2)
+    assert runner.is_alive() is False
+    assert runner.keepalives == 0
+    snap = pool.snapshot()
+    assert snap[0]["connected"] is False
+    assert snap[0]["failures"] == 0
+
+
+def test_connection_pool_keeps_warm_within_window():
+    """An open connection within the idle window is kept warm via keepalive."""
+    device = _switch()
+    runner = _LazyRunner()
+    runner.connect()
+    runner.idle = 0.0
+    pool = ConnectionPool(
+        runner_for=lambda d: runner,
+        devices_provider=lambda: [device],
+        idle_timeout=10.0,
+        keepalive_interval=0.02,
+    )
+    _run_pool_until(pool, lambda: runner.keepalives > 0)
+    assert runner.keepalives > 0
+    assert runner.closed_idle is False
+    assert pool.snapshot()[0]["connected"] is True
+
+
+def test_connection_pool_reaps_idle_connection():
+    """An open connection idle past the window is gracefully closed."""
+    device = _switch()
+    runner = _LazyRunner()
+    runner.connect()
+    runner.idle = 60.0
+    pool = ConnectionPool(
+        runner_for=lambda d: runner,
+        devices_provider=lambda: [device],
+        idle_timeout=1.0,
+        keepalive_interval=0.02,
+    )
+    _run_pool_until(pool, lambda: runner.closed_idle)
+    assert runner.closed_idle is True
+    assert pool.snapshot()[0]["connected"] is False
 
 
 # -- runtime-store monitoring (web read path) ----------------------------

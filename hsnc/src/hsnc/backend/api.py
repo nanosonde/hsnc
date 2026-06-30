@@ -103,10 +103,11 @@ def device_detail(device_id: str) -> Response:
 def device_ssh_log(device_id: str) -> Response:
     """Return the recent SSH transcript (commands + output) for one device.
 
-    The backend keeps a warm persistent SSH connection per device and records the
-    commands it sends and the output devices return into a bounded ring buffer.
-    This serves the last ``limit`` lines for the terminal-style viewer. In mock
-    mode (no real SSH) it reports the connection as unavailable with no lines.
+    The backend opens an SSH connection on demand for config operations and
+    records the commands it sends and the output devices return into a bounded
+    ring buffer. This serves the last ``limit`` lines for the terminal-style
+    viewer. In mock mode (no real SSH) it reports the connection as unavailable
+    with no lines.
     """
     from ..devices.ssh_transport import SSH_LOG_MAX_LINES
 

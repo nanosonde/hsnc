@@ -441,6 +441,13 @@ class PersistentSshRunner(ParamikoSshRunner):
     access so the pool's keepalive thread and on-demand command calls never
     use the channel concurrently.
 
+    The connection is opened lazily on the first command (config requirement)
+    rather than up front; the pool keeps it warm for repeat requests and closes
+    it once it has been idle past the configured window (see :meth:`idle_seconds`
+    and :meth:`close_idle`). ``_last_activity`` tracks the last config command or
+    reply only — keepalives deliberately do not reset it, so idleness reflects
+    config inactivity.
+
     The context-manager protocol is a no-op on exit so adapters written as
     ``with runner: ...`` reuse the persistent connection instead of closing it.
     """
@@ -448,6 +455,7 @@ class PersistentSshRunner(ParamikoSshRunner):
     def __init__(self, target: SshTarget) -> None:
         super().__init__(target)
         self._op_lock = threading.RLock()
+        self._last_activity = time.monotonic()
 
     def __enter__(self) -> PersistentSshRunner:
         return self
@@ -455,11 +463,6 @@ class PersistentSshRunner(ParamikoSshRunner):
     def __exit__(self, *exc_info: object) -> None:
         # Keep the connection open; the pool owns its lifecycle.
         return None
-
-    def ensure_connected(self) -> None:
-        """Open the connection if needed; raises :class:`SshError` on failure."""
-        with self._op_lock:
-            self._connect()
 
     def is_alive(self) -> bool:
         with self._op_lock:
@@ -483,10 +486,26 @@ class PersistentSshRunner(ParamikoSshRunner):
                 self.close()
                 return False
 
+    def idle_seconds(self) -> float:
+        """Seconds since the last config command or reply on this connection."""
+        with self._op_lock:
+            return time.monotonic() - self._last_activity
+
+    def close_idle(self) -> None:
+        """Gracefully close the connection after an idle period, noting it."""
+        with self._op_lock:
+            if self._client is None:
+                return
+            self._transcript.record(
+                "info",
+                f"closing idle connection after {self.idle_seconds():.0f}s",
+            )
+            self.close()
+
     def run(self, command: str) -> str:
         with self._op_lock:
             try:
-                return super().run(command)
+                out = super().run(command)
             except Exception as exc:  # noqa: BLE001 - dropped link: reconnect once, retry
                 _RUNNER_LOG.warning(
                     "SSH command on %s failed (%s); reconnecting and retrying once.",
@@ -494,12 +513,14 @@ class PersistentSshRunner(ParamikoSshRunner):
                     exc,
                 )
                 self.close()
-                return super().run(command)
+                out = super().run(command)
+            self._last_activity = time.monotonic()
+            return out
 
     def run_shell(self, commands: Sequence[str]) -> str:
         with self._op_lock:
             try:
-                return super().run_shell(commands)
+                out = super().run_shell(commands)
             except Exception as exc:  # noqa: BLE001 - dropped link: reconnect once, retry
                 _RUNNER_LOG.warning(
                     "SSH shell on %s failed (%s); reconnecting and retrying once.",
@@ -507,7 +528,9 @@ class PersistentSshRunner(ParamikoSshRunner):
                     exc,
                 )
                 self.close()
-                return super().run_shell(commands)
+                out = super().run_shell(commands)
+            self._last_activity = time.monotonic()
+            return out
 
 
 class PersistentRunnerRegistry:

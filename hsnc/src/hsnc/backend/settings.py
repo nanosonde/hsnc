@@ -21,6 +21,7 @@ def settings_from_env() -> Settings:
         "false",
         "False",
     )
+    ssh_idle_timeout = int(os.environ.get("HSNC_SSH_IDLE_TIMEOUT", "300"))
     return Settings(
         config_dir=config_dir,
         data_dir=data_dir,
@@ -28,5 +29,6 @@ def settings_from_env() -> Settings:
         poll_interval_seconds=poll_interval,
         retention_days=retention_days,
         baseline_on_start=baseline_on_start,
+        ssh_idle_timeout_seconds=ssh_idle_timeout,
         ssh=SshConnectionSettings.from_env(),
     )
