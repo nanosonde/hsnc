@@ -17,8 +17,8 @@ devices:
     connection:              # SSH access; password comes from the environment
       username: root
       port: 22
-    monitoring:              # where live data is polled from (optional)
-      source: primary        # primary | secondary | none
+    monitoring:              # live polling (optional)
+      enabled: true          # false disables polling; device shows "unknown"
 ```
 
 `devices.yaml` is environment-specific and git-ignored. Copy the shipped template
@@ -35,19 +35,18 @@ flowchart TB
       MON[Monitoring plane]
     end
     CFG -->|SSH only: read/write VLANs, ports, SSIDs| DEV[Device]
-    MON -->|primary: SSH scrape| DEV
-    MON -->|secondary: Prometheus / SNMPv3| DEV
+    MON -->|Prometheus / SNMPv3| DEV
 ```
 
 - **Configuration** is always SSH (OpenWrt UCI, JetStream CLI).
-- **Monitoring** picks live status/clients via `monitoring.source`:
-  - `primary` — scrape over SSH (no extra device setup),
-  - `secondary` — a dedicated channel (Prometheus for OpenWrt, SNMPv3 for
-    switches),
-  - `none` — disable polling; the device shows `unknown`.
+- **Monitoring** never uses SSH; the transport is fixed by platform:
+  - Prometheus exporter for OpenWrt gateways/APs,
+  - SNMPv3 for JetStream switches,
+  - set `monitoring.enabled: false` to disable polling (the device shows
+    `unknown`).
 
-Selection is strict: a `secondary` device is never silently polled over SSH. Set
-up the secondary channel per platform in [device setup](../devices/README.md).
+There is no SSH fallback: an unreachable monitoring endpoint shows `unknown`. Set
+up the monitoring transport per platform in [device setup](../devices/README.md).
 
 ## Device status
 

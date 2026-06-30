@@ -5,38 +5,35 @@ HSNC manages devices over **two planes**:
 | Plane | Transport | Purpose |
 | --- | --- | --- |
 | **Configuration** | SSH (always) | Read the running config, push changes (VLANs, ports, SSIDs). |
-| **Monitoring** | Pluggable | Poll *live* runtime data: device status, uptime, attached clients. |
+| **Monitoring** | Non-SSH, per platform | Poll *live* runtime data: device status, uptime, attached clients. |
 
-Configuration is always done over SSH. Monitoring is selected **per device** in
-[`config/devices.yaml`](../../config/devices.yaml.example) via a `monitoring`
-block:
+Configuration is always done over SSH. The monitoring plane **never uses SSH**:
+the transport is fixed by platform — a **Prometheus exporter** for OpenWrt
+gateways/APs and **SNMPv3** for JetStream switches. There is nothing to select.
+The optional per-device `monitoring` block in
+[`config/devices.yaml`](../../config/devices.yaml.example) only toggles polling
+and, if needed, overrides the endpoint:
 
 ```yaml
 monitoring:
-  source: primary | secondary | none   # default: primary
-  secondary:                           # only read when source: secondary
-    type: prometheus | snmp
-    endpoint: "http://10.0.0.5:9100/metrics"   # or snmp host[:port]
-    port: 161                          # SNMP only (default 161)
+  enabled: true                              # default; false disables polling
+  endpoint: "http://10.0.0.5:9100/metrics"   # optional; SNMP host[:port] for switches
+  port: 161                                  # optional, SNMP only (default 161)
 ```
 
-* **`source: primary`** — poll over the same SSH plane used for configuration
-  (OpenWrt `ubus`, JetStream interactive CLI). No extra device setup required.
-* **`source: secondary`** — poll over the device's dedicated telemetry channel:
-  a **Prometheus exporter** for OpenWrt devices, or **SNMPv3** for JetStream
-  switches. Once a device has a working secondary connection, it is used for
-  polling.
-* **`source: none`** — disable live polling; the device reports `unknown`.
+* **`enabled: true`** (default) — poll the device for live data over its
+  platform transport (Prometheus for OpenWrt, SNMPv3 for JetStream).
+* **`enabled: false`** — disable live polling; the device reports `unknown`.
+* **`endpoint` / `port`** — optional. When omitted the endpoint is derived from
+  the device's management IP (`http://<ip>:9100/metrics` for Prometheus,
+  `<ip>:161` for SNMP).
 
-## Strict selection (no silent fallback)
+## Honest unknown (no SSH fallback)
 
-Selection is **strict**: when `source: secondary` is set, HSNC never falls back
-to SSH for polling. If the secondary connection is unreachable or misconfigured,
-the device honestly reports **`unknown`** with no clients, rather than masking
-the problem. This keeps the operational picture truthful.
-
-If `source: secondary` is set but `secondary.type` is missing or unknown, the
-device is treated as unmonitored (`unknown`) and a warning is logged.
+The monitoring plane never falls back to SSH. If a device's Prometheus exporter
+or SNMPv3 endpoint is unreachable or misconfigured, the device honestly reports
+**`unknown`** with no clients rather than masking the problem. This keeps the
+operational picture truthful.
 
 ## Secrets stay out of the inventory
 
@@ -47,13 +44,13 @@ passwords. See [`.env.example`](../../.env.example).
 
 ## Per-platform setup
 
-| Platform | Kinds | Primary (SSH) | Secondary |
+| Platform | Kinds | Config (SSH) | Monitoring |
 | --- | --- | --- | --- |
-| [OpenWrt](openwrt.md) | gateway, access_point | `ubus` over SSH | Prometheus node-exporter |
+| [OpenWrt](openwrt.md) | gateway, access_point | `uci` over SSH | Prometheus node-exporter |
 | [JetStream](jetstream.md) | switch | interactive CLI | SNMPv3 |
 
-Follow the per-platform guide to enable SSH and (optionally) the secondary
-polling channel:
+Follow the per-platform guide to enable SSH (configuration) and the monitoring
+transport:
 
 * [OpenWrt device setup](openwrt.md)
 * [JetStream switch setup](jetstream.md)

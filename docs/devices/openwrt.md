@@ -1,12 +1,12 @@
 # OpenWrt device setup (gateway / access point)
 
-OpenWrt devices are managed over SSH (configuration plane) and can optionally be
-polled for live runtime data over a **Prometheus exporter** (secondary
-monitoring plane).
+OpenWrt devices are configured over SSH (configuration plane) and polled for live
+runtime data over a **Prometheus exporter** (monitoring plane). The monitoring
+plane never uses SSH.
 
-## 1. Primary connection — SSH (required)
+## 1. SSH — configuration plane (required)
 
-The configuration plane and the *primary* monitoring source both use SSH.
+SSH is used only for reading and pushing configuration (`uci`).
 
 1. Install and enable the SSH server (`dropbear` ships by default on OpenWrt):
 
@@ -27,7 +27,7 @@ The configuration plane and the *primary* monitoring source both use SSH.
    HSNC_DEVICE_AP_1_PASSWORD=...
    ```
 
-3. Inventory entry — primary polling needs no extra config:
+3. Inventory entry — the SSH connection profile:
 
    ```yaml
    - id: ap-1
@@ -38,12 +38,12 @@ The configuration plane and the *primary* monitoring source both use SSH.
        username: root
        port: 22
      monitoring:
-       source: primary
+       enabled: true
    ```
 
-## 2. Secondary connection — Prometheus exporter (optional)
+## 2. Prometheus exporter — monitoring plane (required)
 
-To poll runtime data over Prometheus instead of SSH, install the node exporter
+Live runtime data is read over Prometheus, never SSH. Install the node exporter
 on the OpenWrt device and point HSNC at its `/metrics` endpoint.
 
 ### Install the exporter
@@ -83,6 +83,9 @@ uci commit firewall
 
 ### Point HSNC at the exporter
 
+By default HSNC derives `http://<device-ip>:9100/metrics`, so no `monitoring`
+block is required. Override the endpoint only if the exporter answers elsewhere:
+
 ```yaml
 - id: ap-1
   name: EAP245
@@ -92,13 +95,12 @@ uci commit firewall
     username: root
     port: 22
   monitoring:
-    source: secondary
-    secondary:
-      type: prometheus
-      endpoint: http://192.168.50.3:9100/metrics
+    enabled: true
+    endpoint: http://192.168.50.3:9100/metrics
 ```
 
-If `endpoint` is omitted, HSNC derives `http://<device-ip>:9100/metrics`.
+Set `enabled: false` to disable polling for a device (it then reports
+`unknown`).
 
 ### Optional: bearer token
 
@@ -130,5 +132,5 @@ clients are listed.
 python3 -c "import urllib.request as u; print(u.urlopen('http://192.168.50.3:9100/metrics', timeout=5).read()[:200])"
 ```
 
-A `200` response with `node_*` metrics confirms the secondary connection. HSNC's
+A `200` response with `node_*` metrics confirms the monitoring connection. HSNC's
 poll loop will then read live data from Prometheus for this device.

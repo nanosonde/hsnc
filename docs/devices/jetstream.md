@@ -1,14 +1,13 @@
 # JetStream switch setup
 
-TP-Link JetStream switches are managed over the SSH CLI (configuration plane)
-and can optionally be polled for live runtime data over **SNMPv3** (secondary
-monitoring plane).
+TP-Link JetStream switches are configured over the SSH CLI (configuration plane)
+and polled for live runtime data over **SNMPv3** (monitoring plane). The
+monitoring plane never uses SSH.
 
-## 1. Primary connection — SSH CLI (required)
+## 1. SSH CLI — configuration plane (required)
 
-The configuration plane and the *primary* monitoring source both use the
-interactive SSH CLI. (JetStream switches reject one-shot `exec` channels, so
-HSNC drives a single interactive shell session.)
+Configuration uses the interactive SSH CLI. (JetStream switches reject one-shot
+`exec` channels, so HSNC drives a single interactive shell session.)
 
 1. Enable SSH from the switch CLI:
 
@@ -32,7 +31,7 @@ HSNC drives a single interactive shell session.)
    HSNC_DEVICE_SWITCH_1_PASSWORD=...
    ```
 
-3. Inventory entry — primary polling needs no extra config:
+3. Inventory entry — the SSH connection profile:
 
    ```yaml
    - id: switch-1
@@ -43,7 +42,7 @@ HSNC drives a single interactive shell session.)
        username: admin
        port: 22
      monitoring:
-       source: primary
+       enabled: true
    ```
 
 ### Apply safety (rollback)
@@ -65,9 +64,9 @@ so a VLAN created by a partial push may linger until the next apply; because
 startup-config is never written on failure, a switch reload always recovers the
 last-known-good configuration.
 
-## 2. Secondary connection — SNMPv3 (optional)
+## 2. SNMPv3 — monitoring plane (required)
 
-To poll runtime data over SNMPv3 instead of the SSH CLI, configure an SNMPv3
+Live runtime data is read over SNMPv3, never the SSH CLI. Configure an SNMPv3
 user (USM, `authPriv` recommended) on the switch.
 
 ### Configure SNMPv3 on the switch
@@ -89,6 +88,9 @@ exit
 
 ### Point HSNC at the switch
 
+By default HSNC uses the device IP on UDP/161, so no `monitoring` block is
+required. Override the host/port only if SNMP answers elsewhere:
+
 ```yaml
 - id: switch-1
   name: TL-SG2210P
@@ -98,14 +100,14 @@ exit
     username: admin
     port: 22
   monitoring:
-    source: secondary
-    secondary:
-      type: snmp
-      endpoint: 192.168.50.2   # optional; defaults to the device ip
-      port: 161                # optional; defaults to 161
+    enabled: true
+    endpoint: 192.168.50.2   # optional; defaults to the device ip
+    port: 161                # optional; defaults to 161
 ```
 
 `endpoint` may be `host` or `host:port`. If omitted, HSNC uses the device IP.
+Set `enabled: false` to disable polling for a device (it then reports
+`unknown`).
 
 ### Provide SNMPv3 credentials via the environment
 
@@ -164,5 +166,5 @@ print(next(it)[3])
 PY
 ```
 
-A returned `sysName` confirms the secondary connection. HSNC's poll loop will
+A returned `sysName` confirms the monitoring connection. HSNC's poll loop will
 then read live data over SNMPv3 for this device.

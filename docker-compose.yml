@@ -32,9 +32,9 @@ services:
     # e.g.:
     #   HSNC_OPENWRT_SSH_PASSWORD=...
     #   HSNC_JETSTREAM_SSH_PASSWORD=...
-    # Secondary monitoring (optional): devices set to `monitoring.source:
-    # secondary` poll over Prometheus (OpenWrt) or SNMPv3 (JetStream). Put the
-    # tokens/keys in the same .env file, e.g.:
+    # Monitoring transport (per platform, never SSH): OpenWrt gateways/APs poll
+    # over Prometheus, JetStream switches over SNMPv3. Put the tokens/keys in the
+    # same .env file, e.g.:
     #   HSNC_PROMETHEUS_TOKEN=...            # OpenWrt exporter bearer token
     #   HSNC_SNMP_USER=hsncmon               # SNMPv3 USM user (needs [snmp] extra)
     #   HSNC_SNMP_AUTH_KEY=...               # SNMPv3 auth password

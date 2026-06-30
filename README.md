@@ -70,28 +70,26 @@ in the backend, never in a web request** (see *Processes & storage*):
 - **Config plane (SSH only).** A `DeviceAdapter` (`supports` / `fetch_config` /
   `push_config`) reads and writes declarative configuration over SSH only —
   OpenWrt UCI and JetStream CLI. SSH is never used for anything but configuration.
-- **Monitoring plane (pluggable).** A `MonitoringProvider`
-  (`fetch_status` / `fetch_clients`) supplies runtime data. The provider is
-  selected per device by a `MonitoringProviderFactory`, driven by the device's
-  `monitoring.source` (`primary` / `secondary` / `none`). The shipped providers
-  are an **SSH scrape** (OpenWrt `ubus`, JetStream CLI — the *primary* source), a
-  **Prometheus** exporter reader for OpenWrt and an **SNMPv3** reader for
-  JetStream switches (the *secondary* sources), plus a **mock** provider (demo
-  data) and a **null** provider. New sources slot in behind the same port without
-  touching the config plane.
+- **Monitoring plane (non-SSH, per platform).** A `MonitoringProvider`
+  (`fetch_status` / `fetch_clients`) supplies runtime data and never uses SSH.
+  The provider is selected per device by a `MonitoringProviderFactory` from the
+  device kind: a **Prometheus** exporter reader for OpenWrt gateways/APs and an
+  **SNMPv3** reader for JetStream switches, plus a **mock** provider (demo data)
+  and a **null** provider (polling disabled). New platforms slot in behind the
+  same port without touching the config plane.
 
-Selection is **strict**: a device set to `source: secondary` is never silently
-polled over SSH. If its secondary channel is down or misconfigured it reports
-`UNKNOWN` rather than masking the problem. See
+There is no SSH fallback: a device whose Prometheus/SNMPv3 endpoint is down or
+misconfigured reports `UNKNOWN` rather than masking the problem. Set
+`monitoring.enabled: false` to disable polling for a device. See
 [docs/devices/](docs/devices/README.md) for per-platform setup.
 
 The **web frontend** never opens either plane directly: every read and write is an
 HTTP call to the backend, which serves runtime data from its latest monitoring
 snapshot and performs all configuration reads/writes itself.
 
-If a device has no working runtime source (e.g. its `monitoring.source` is
-`none`, or a chosen secondary channel is unreachable), it simply reports **no
-runtime data** rather than failing.
+If a device has no working runtime source (e.g. `monitoring.enabled: false`, or
+its Prometheus/SNMPv3 endpoint is unreachable), it simply reports **no runtime
+data** rather than failing.
 
 ### Reachability
 
@@ -380,12 +378,12 @@ Per-device host, port and username come from the `connection` block in
       username: root
 ```
 
-#### Secondary monitoring (Prometheus / SNMPv3)
+#### Monitoring transport (Prometheus / SNMPv3)
 
-Devices can be polled over a dedicated telemetry channel instead of SSH by
-setting `monitoring.source: secondary` in `config/devices.yaml` (OpenWrt →
-Prometheus exporter, JetStream → SNMPv3). Only the non-secret target lives in the
-inventory; credentials come from the environment. See
+The monitoring plane never uses SSH; the transport is fixed by platform —
+OpenWrt gateways/APs over a Prometheus exporter, JetStream switches over SNMPv3.
+Only the non-secret target lives in `config/devices.yaml` (and may be omitted to
+derive it from the device IP); credentials come from the environment. See
 [docs/devices/](docs/devices/README.md) for full setup.
 
 | Variable                              | Default     | Description                                              |

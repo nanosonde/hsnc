@@ -24,10 +24,10 @@ flowchart LR
     A[Admin] -->|edit| C[hsnc controller]
     C -->|stage pending changes| C
     A -->|Review &#38; Apply| C
-    C -->|SSH| D1[OpenWrt gateway / AP]
-    C -->|SSH| D2[JetStream switch]
-    D1 -->|status &#38; clients| C
-    D2 -->|status &#38; clients| C
+    C -->|SSH config| D1[OpenWrt gateway / AP]
+    C -->|SSH config| D2[JetStream switch]
+    D1 -->|Prometheus: status &#38; clients| C
+    D2 -->|SNMPv3: status &#38; clients| C
     C -->|dashboard| A
 ```
 

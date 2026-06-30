@@ -15,9 +15,9 @@ hsnc/                  REST backend package (dist: hsnc, import: hsnc)
     devices/           device drivers + monitoring providers
       ssh_transport.py shared SSH transport, resolver, settings
       factory.py       config-adapter factory (by kind)
-      monitoring.py    monitoring-provider factory (by source) + mock/null
-      openwrt/         adapter, config_renderer, ssh_monitoring, prometheus_monitoring
-      jetstream/       adapter, config_renderer, ssh_monitoring, snmp_monitoring
+      monitoring.py    monitoring-provider factory (by kind) + mock/null
+      openwrt/         adapter, config_renderer, prometheus_monitoring
+      jetstream/       adapter, config_renderer, snmp_monitoring
     persistence/       SQLite runtime store + JSONL apply history
     backend/           Flask REST app, background poller, CLI (hsnc-ctl)
   tests/               unit + fakes
@@ -45,7 +45,8 @@ The frontend depends on none of it — it reaches the backend over HTTP.
 
 1. New package under `hsnc/src/hsnc/devices/<platform>/` with `adapter.py`
    (`DeviceAdapter`) and `config_renderer.py`.
-2. Optional monitoring providers (`ssh_monitoring.py`, plus a secondary).
+2. A non-SSH monitoring provider (e.g. `prometheus_monitoring.py` or
+   `snmp_monitoring.py`).
 3. Register in `factory.py` (config) and `monitoring.py` (provider factory).
 4. Wire env/settings in `container.py`; add unit tests with fakes.
 

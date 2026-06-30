@@ -9,8 +9,8 @@ hsnc is two standalone packages — a REST **backend** (`hsnc/`) and a presentat
 flowchart TB
     U[Browser] -->|HTML / HTMX| W[hsncweb frontend]
     W -->|HTTP /api JSON| B[hsnc backend]
-    B -->|SSH config + primary monitoring| DEV[Devices]
-    B -->|SNMPv3 / Prometheus secondary| DEV
+    B -->|SSH: config plane| DEV[Devices]
+    B -->|Prometheus / SNMPv3: monitoring plane| DEV
     B --> ST[(YAML config · SQLite runtime · JSONL history)]
 ```
 
@@ -41,23 +41,23 @@ flowchart TD
 
 ## Two planes
 
-Device access splits into independent planes so monitoring can use a different
-transport than configuration:
+Device access splits into independent planes; the monitoring plane never uses
+SSH:
 
 - **Config plane (SSH only):** `DeviceAdapter` — `supports` / `fetch_config` /
   `push_config`. OpenWrt UCI, JetStream CLI.
-- **Monitoring plane (pluggable):** `MonitoringProvider` — `fetch_status` /
-  `fetch_clients`, chosen per device by a `MonitoringProviderFactory` from
-  `monitoring.source` (primary SSH scrape, secondary Prometheus/SNMPv3, mock,
-  null). Selection is strict — no SSH fallback for a secondary device.
+- **Monitoring plane (non-SSH, per platform):** `MonitoringProvider` —
+  `fetch_status` / `fetch_clients`, chosen per device by a
+  `MonitoringProviderFactory` from the device kind (OpenWrt gateways/APs →
+  Prometheus, JetStream switches → SNMPv3; mock in demo mode; null when polling
+  is disabled). There is no SSH fallback.
 
 ```mermaid
 flowchart LR
     POLL[poller] --> F[MonitoringProviderFactory]
-    F -->|primary| SSHM[SSH scrape]
-    F -->|secondary: prometheus| PROM[OpenWrt exporter]
-    F -->|secondary: snmp| SNMP[JetStream SNMPv3]
-    F -->|none / misconfig| NULL[Null → UNKNOWN]
+    F -->|switch| SNMP[JetStream SNMPv3]
+    F -->|gateway / access point| PROM[OpenWrt exporter]
+    F -->|disabled| NULL[Null → UNKNOWN]
 ```
 
 ## Processes & data
