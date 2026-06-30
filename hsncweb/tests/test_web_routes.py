@@ -138,6 +138,44 @@ def test_read_only_blocks_apply_device(auth_client):
     assert resp.status_code in (302, 303)
 
 
+@pytest.fixture
+def writable_auth_client(tmp_path):
+    settings = Settings(
+        config_dir=_FIXTURES,
+        data_dir=tmp_path,
+        use_mock_devices=True,
+        baseline_on_start=False,
+    )
+    api_client, container = backend_api_client(settings)
+    flask_app = create_app(api_client=api_client)
+    flask_app.config["READ_ONLY"] = False
+    flask_app.config["TESTING"] = True
+    try:
+        client = flask_app.test_client()
+        resp = client.post(
+            "/login",
+            data={"username": "admin", "password": "admin"},
+            follow_redirects=False,
+        )
+        assert resp.status_code in (302, 303), resp.data
+        yield client
+    finally:
+        container.close()
+
+
+def test_apply_unknown_device_id_flashes_error(writable_auth_client):
+    # A stale/typo device id must surface a clear error, not a silent
+    # "Nothing to apply.".
+    resp = writable_auth_client.post(
+        "/config/apply/does-not-exist", follow_redirects=True
+    )
+    assert resp.status_code == 200
+    html = resp.get_data(as_text=True)
+    assert "Unknown device id" in html
+
+
+
+
 def test_backup_export_returns_zip(auth_client):
     resp = auth_client.get("/backup/export")
     assert resp.status_code == 200

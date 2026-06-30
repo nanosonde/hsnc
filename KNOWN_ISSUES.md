@@ -32,21 +32,25 @@ the trade-off is a deliberate decision rather than an oversight.
 
 ## Apply workflow
 
-### `device_ids` are filtered, not validated; removed devices are skipped silently
+### `device_ids` validation and removed-device handling
 
-- **Current behavior:** `ApplyConfig.execute(device_ids=...)` uses `device_ids`
-  purely as a membership filter. Unknown/typo/stale IDs are silently ignored
-  (no error, no result row), and devices that were *removed* from config are
-  never pushed, cleaned up, or reported in `ApplyResult` / apply history. See
+- **Status:** Resolved. `ApplyConfig.execute(device_ids=...)` now reports an
+  explicitly-requested id that matches no known device as a failed
+  `DeviceApplyResult` (`"Unknown device id '<id>'."`) instead of silently doing
+  nothing; an id that exists but has no pending changes stays a quiet no-op.
+  Devices *removed* from the inventory were already deprovisioned (reported
+  `ok=True "Removed from inventory."` and dropped from the applied snapshot). See
   [`hsnc/src/hsnc/use_cases/apply_config.py`](hsnc/src/hsnc/use_cases/apply_config.py).
-- **Risk:** Callers get no feedback when they request an ID that no longer
-  exists, and decommissioned devices leave stale config on the hardware.
-- **Why deferred:** `ApplyResult` / `DeviceApplyResult` and the apply-history
-  entries are a caller-visible contract consumed by the REST backend, the web
-  frontend, and golden/route tests. Adding validation (raising on unknown IDs)
-  or representing removed devices changes which entries appear and when errors
-  are raised — a product/semantics decision, not a pure internal fix.
-- **Status:** Deferred pending a decision on the intended semantics.
+- **Design note:** Validation is return-based (a failed result row), not an
+  exception, so the `ApplyResult` JSON contract is preserved and a stale request
+  never turns into a 5xx.
+- **Remaining limitation:** Read-only mode is enforced only in the web tier
+  (`_enforce_read_only` before_request), by design — the REST backend is the
+  device-I/O plane and has no read-only concept (ADR-0008/0006). A caller using a
+  backend API token directly is not gated by read-only. Likewise there is no
+  concurrency lock around apply, so overlapping apply runs could race on the
+  applied snapshot; both are tracked as potential future work.
+
 
 ## Device adapters
 

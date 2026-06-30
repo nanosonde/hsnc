@@ -120,6 +120,26 @@ def test_apply_skips_unchanged_devices(config, adapters):
     assert history.events == []
 
 
+def test_apply_unknown_device_id_is_reported(config, adapters):
+    # Requesting a device id that matches no known device must surface a failure
+    # instead of silently doing nothing.
+    applied = FakeAppliedConfigStore(devices=copy.deepcopy(config.list_devices()))
+    history = FakeApplyHistoryStore()
+    before = {d.id: copy.deepcopy(d) for d in applied.load()}
+
+    result = ApplyConfig(config, adapters, applied, history).execute(
+        device_ids=["does-not-exist"], username="admin"
+    )
+
+    assert not result.ok
+    assert [(r.device_id, r.ok) for r in result.results] == [("does-not-exist", False)]
+    assert "Unknown device id" in result.results[0].message
+    # The applied snapshot is untouched and the failed attempt is recorded.
+    assert {d.id: d for d in applied.load()} == before
+    assert len(history.events) == 1
+    assert history.events[0].ok is False
+
+
 def test_apply_records_field_changes_for_history(config, adapters, devices):
     applied = FakeAppliedConfigStore(devices=copy.deepcopy(devices))
     history = FakeApplyHistoryStore()

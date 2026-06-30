@@ -153,6 +153,23 @@ class ApplyConfig:
                 )
             )
 
+        # Surface explicitly-requested ids that match no known device (a typo or a
+        # device deleted since the page was rendered) as a failure, instead of
+        # silently doing nothing. Ids that exist but simply have no pending changes
+        # stay a quiet no-op.
+        if selected is not None:
+            known = {d.id for d in self._config.list_devices()}
+            known |= {device_id for device_id, _ in removed}
+            for device_id in sorted(selected - known):
+                results.append(
+                    DeviceApplyResult(
+                        device_id,
+                        device_id,
+                        ok=False,
+                        message=f"Unknown device id '{device_id}'.",
+                    )
+                )
+
         result = ApplyResult(results=results)
 
         # Merge successfully-applied devices into the existing snapshot so a

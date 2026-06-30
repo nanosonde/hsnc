@@ -156,15 +156,14 @@ def pending():
 
 
 def _flash_apply_result(result) -> None:
-    if result.ok:
-        applied = len(result.results)
-        if applied:
-            flash(f"Configuration applied to {applied} device(s).", "success")
-        else:
-            flash("Nothing to apply.", "success")
-    else:
-        for failure in result.failures:
-            flash(f"{failure.device_name}: {failure.message}", "error")
+    applied = [r for r in result.results if r.ok]
+    failures = result.failures
+    if applied:
+        flash(f"Configuration applied to {len(applied)} device(s).", "success")
+    for failure in failures:
+        flash(f"{failure.device_name}: {failure.message}", "error")
+    if not applied and not failures:
+        flash("Nothing to apply.", "success")
 
 
 @bp.route("/config/apply", methods=["POST"])
