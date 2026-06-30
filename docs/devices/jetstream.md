@@ -46,6 +46,25 @@ HSNC drives a single interactive shell session.)
        source: primary
    ```
 
+### Apply safety (rollback)
+
+JetStream switches have no transactional config staging — each `configure`
+command changes the running-config immediately, and `copy running-config
+startup-config` is the only durable save. To avoid leaving a switch
+half-configured, HSNC's apply:
+
+1. snapshots the current running-config,
+2. pushes the new config **without** saving,
+3. saves to startup-config **only** if every command applied without a `%`
+   error, and
+4. on any failure (a rejected command or a dropped connection) re-pushes the
+   snapshot to restore the running-config and leaves startup-config untouched.
+
+The restore re-asserts the previous hostname/VLANs/ports but issues no deletes,
+so a VLAN created by a partial push may linger until the next apply; because
+startup-config is never written on failure, a switch reload always recovers the
+last-known-good configuration.
+
 ## 2. Secondary connection — SNMPv3 (optional)
 
 To poll runtime data over SNMPv3 instead of the SSH CLI, configure an SNMPv3

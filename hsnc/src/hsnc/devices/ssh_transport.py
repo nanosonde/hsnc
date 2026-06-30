@@ -349,6 +349,13 @@ class FakeSshRunner(SshCommandRunner):
     :class:`SshError`, so tests can exercise fallback paths. Executed commands and
     interactive shell invocations are recorded so tests can assert on the
     commands an adapter sends.
+
+    ``shell_output`` is the default canned reply for every ``run_shell`` call.
+    ``shell_outputs`` overrides it per call: each successive ``run_shell``
+    consumes the next entry (falling back to ``shell_output`` once exhausted), so
+    a test can model a multi-phase shell flow such as snapshot -> push -> save.
+    A ``run_shell`` whose batch contains a command listed in ``errors`` raises
+    :class:`SshError`, mirroring a mid-session transport drop.
     """
 
     def __init__(
@@ -356,13 +363,16 @@ class FakeSshRunner(SshCommandRunner):
         responses: dict[str, str] | None = None,
         shell_output: str = "",
         errors: Sequence[str] | None = None,
+        shell_outputs: Sequence[str] | None = None,
     ) -> None:
         self._responses = responses or {}
         self._shell_output = shell_output
         self._errors = tuple(errors or ())
+        self._shell_outputs = list(shell_outputs) if shell_outputs is not None else None
         self.commands: list[str] = []
         self.shell_invocations: list[list[str]] = []
         self._transcript = SshTranscript()
+
 
     @property
     def transcript(self) -> SshTranscript:
@@ -389,8 +399,19 @@ class FakeSshRunner(SshCommandRunner):
         self.shell_invocations.append(list(commands))
         for command in commands:
             self._transcript.record("sent", command)
-        self._transcript.record("recv", self._shell_output)
-        return self._shell_output
+        if any(
+            command.startswith(prefix)
+            for command in commands
+            for prefix in self._errors
+        ):
+            self._transcript.record("error", "shell command failed (fake)")
+            raise SshError("shell command failed (fake)")
+        if self._shell_outputs:
+            output = self._shell_outputs.pop(0)
+        else:
+            output = self._shell_output
+        self._transcript.record("recv", output)
+        return output
 
     def __enter__(self) -> FakeSshRunner:
         return self

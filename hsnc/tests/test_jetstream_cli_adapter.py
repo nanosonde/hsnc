@@ -2,12 +2,15 @@
 
 from __future__ import annotations
 
+import pytest
+
 from hsnc.devices.jetstream.adapter import JetStreamCliAdapter
 from hsnc.devices.jetstream.ssh_monitoring import JetStreamSshMonitoringProvider
 from hsnc.devices.ssh_transport import (
     FakeSshRunner,
     SshConnectionResolver,
     SshConnectionSettings,
+    SshError,
 )
 from hsnc.entities import Device, SwitchPort, Vlan
 from hsnc.enums import ConnectionType, DeviceKind, DeviceStatus, PortMode
@@ -197,8 +200,63 @@ def test_push_config_runs_single_interactive_shell_session() -> None:
     device.ports = [SwitchPort(number=1, mode=PortMode.ACCESS, pvid=10)]
     _adapter(runner).push_config(device)
 
-    assert len(runner.shell_invocations) == 1
-    lines = runner.shell_invocations[0]
-    assert lines[0] == "configure"
-    assert "hostname TL-SG2210P" in lines
-    assert lines[-1] == "copy running-config startup-config"
+    # A clean push is three phases: snapshot, body (no save), then persist.
+    assert len(runner.shell_invocations) == 3
+    snapshot, body, save = runner.shell_invocations
+    assert snapshot == ["enable", "show running-config"]
+    assert body[0] == "configure"
+    assert "hostname TL-SG2210P" in body
+    assert "copy running-config startup-config" not in body
+    assert save == ["enable", "copy running-config startup-config"]
+
+
+def test_push_config_persists_only_after_a_clean_apply() -> None:
+    runner = FakeSshRunner(shell_outputs=["#\nend\n", "", ""])
+    device = _device()
+    device.vlans = [Vlan(10, "Management")]
+    _adapter(runner).push_config(device)
+
+    # The final invocation is the deferred save.
+    assert runner.shell_invocations[-1] == ["enable", "copy running-config startup-config"]
+
+
+def test_push_config_rolls_back_running_config_on_cli_rejection() -> None:
+    # Snapshot read returns a prior config; the body push is rejected by the
+    # switch; the save must never run and the snapshot must be re-pushed.
+    runner = FakeSshRunner(
+        shell_outputs=[
+            _RUNNING_CONFIG,  # snapshot
+            "% Unrecognized command: switchport bogus",  # body push rejected
+            "",  # restore push
+        ]
+    )
+    device = _device()
+    device.vlans = [Vlan(99, "New")]
+
+    with pytest.raises(SshError, match="rejected"):
+        _adapter(runner).push_config(device)
+
+    sent = [cmd for batch in runner.shell_invocations for cmd in batch]
+    # startup-config was never written.
+    assert "copy running-config startup-config" not in sent
+    # The captured prior config (hostname core-switch) was re-pushed to restore.
+    restore = runner.shell_invocations[-1]
+    assert restore[0] == "configure"
+    assert "hostname core-switch" in restore
+
+
+def test_push_config_attempts_restore_on_transport_drop() -> None:
+    # A command failing mid-push (transport drop) raises; the save must not run.
+    runner = FakeSshRunner(
+        shell_outputs=[_RUNNING_CONFIG],
+        errors=["configure"],
+    )
+    device = _device()
+    device.vlans = [Vlan(99, "New")]
+
+    with pytest.raises(SshError):
+        _adapter(runner).push_config(device)
+
+    sent = [cmd for batch in runner.shell_invocations for cmd in batch]
+    assert "copy running-config startup-config" not in sent
+

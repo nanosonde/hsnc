@@ -14,11 +14,21 @@ from ...interfaces import DeviceConfigRenderer
 class JetStreamCliRenderer(DeviceConfigRenderer):
     """Renders TP-Link JetStream switch configuration as CLI commands."""
 
+    #: Persists running-config to startup-config. Separated from the config body
+    #: so the adapter can defer it until a push has been verified error-free.
+    SAVE_COMMAND = "copy running-config startup-config"
+
     @property
     def platform(self) -> str:
         return "TP-Link JetStream CLI (SSH)"
 
-    def render(self, device: Device) -> list[str]:
+    def render_body(self, device: Device) -> list[str]:
+        """Render the configuration commands *without* the trailing save.
+
+        These commands mutate the switch's running-config live; the save
+        (:attr:`SAVE_COMMAND`) is kept separate so a failed push can be rolled
+        back before anything is persisted to startup-config.
+        """
         lines: list[str] = ["configure", f"hostname {device.name}"]
 
         for vlan in sorted(device.vlans, key=lambda v: v.vlan_id):
@@ -44,5 +54,7 @@ class JetStreamCliRenderer(DeviceConfigRenderer):
             lines.append(" exit")
 
         lines.append("end")
-        lines.append("copy running-config startup-config")
         return lines
+
+    def render(self, device: Device) -> list[str]:
+        return self.render_body(device) + [self.SAVE_COMMAND]

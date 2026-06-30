@@ -18,6 +18,8 @@ privileged EXEC mode, so the read sends ``enable`` then ``show running-config``.
 
 from __future__ import annotations
 
+import logging
+import re
 from dataclasses import replace
 
 from ...entities import Device, SwitchPort, Vlan
@@ -27,9 +29,39 @@ from ..ssh_transport import (
     RunnerFactory,
     SshCommandRunner,
     SshConnectionResolver,
+    SshError,
     default_runner_factory,
 )
 from .config_renderer import JetStreamCliRenderer
+
+_RUNNER_LOG = logging.getLogger("hsnc.jetstream")
+
+# JetStream rejects a bad command with a `% <reason>` line but keeps the session
+# alive, so a mid-push rejection is otherwise invisible. Match only the specific
+# error phrasings (anchored at the start of a stripped line) to avoid tripping on
+# config content such as a VLAN name that happens to contain a '%'.
+_CLI_ERROR_RE = re.compile(
+    r"(?im)^\s*%\s*("
+    r"unrecognized command"
+    r"|invalid"
+    r"|incomplete"
+    r"|ambiguous"
+    r"|unknown command"
+    r"|bad command"
+    r")",
+)
+
+
+def _scan_for_errors(output: str) -> str | None:
+    """Return the first JetStream CLI error line in ``output``, or ``None``."""
+    match = _CLI_ERROR_RE.search(output)
+    if match is None:
+        return None
+    # Report the whole offending line for a useful error message.
+    line_start = output.rfind("\n", 0, match.start()) + 1
+    line_end = output.find("\n", match.start())
+    return output[line_start : line_end if line_end != -1 else None].strip()
+
 
 
 class JetStreamCliAdapter(DeviceAdapter):
@@ -72,7 +104,63 @@ class JetStreamCliAdapter(DeviceAdapter):
     def push_config(self, device: Device) -> None:
         runner = self._runner(device)
         with runner:
-            runner.run_shell(self._renderer.render(device))
+            # JetStream has no UCI-style staging: every `configure` line mutates
+            # running-config live, and `copy running-config startup-config` is the
+            # only durable persist. So capture the current running-config first,
+            # push the body without persisting, and only save once it applied
+            # cleanly. On any failure, re-push the snapshot to restore the running
+            # config and leave startup-config as the last-known-good (never saved).
+            before = self._snapshot(runner, device)
+
+            try:
+                output = runner.run_shell(self._renderer.render_body(device))
+            except Exception as exc:
+                _RUNNER_LOG.warning(
+                    "Push to %s failed mid-apply (%s); attempting to restore the "
+                    "previous running-config.",
+                    device.name,
+                    exc,
+                )
+                self._restore(runner, before)
+                raise
+
+            error = _scan_for_errors(output)
+            if error is not None:
+                _RUNNER_LOG.warning(
+                    "Push to %s was rejected by the switch (%s); restoring the "
+                    "previous running-config.",
+                    device.name,
+                    error,
+                )
+                self._restore(runner, before)
+                raise SshError(f"JetStream push rejected: {error}")
+
+            # The whole batch applied cleanly; persist it to startup-config.
+            runner.run_shell(["enable", self._renderer.SAVE_COMMAND])
+
+    def _snapshot(self, runner: SshCommandRunner, device: Device) -> Device:
+        """Read the current running-config so the push can be rolled back."""
+        raw = runner.run_shell(["enable", "show running-config"])
+        hostname, vlans, ports = self._parse_running_config(raw)
+        return replace(device, name=hostname or device.name, vlans=vlans, ports=ports)
+
+    def _restore(self, runner: SshCommandRunner, before: Device) -> None:
+        """Best-effort re-push of the captured config; never raises.
+
+        The renderer is additive (it re-asserts hostname/VLANs/ports but issues no
+        deletes), so this restores known prior settings rather than guaranteeing a
+        byte-perfect rollback. startup-config is deliberately left untouched, so a
+        device reload always recovers the last-known-good config.
+        """
+        try:
+            runner.run_shell(self._renderer.render_body(before))
+        except Exception as exc:  # noqa: BLE001 - best-effort; original error wins
+            _RUNNER_LOG.warning(
+                "Could not restore the previous running-config on %s: %s",
+                before.name,
+                exc,
+            )
+
 
     # -- parsing helpers -----------------------------------------------------
     @classmethod
