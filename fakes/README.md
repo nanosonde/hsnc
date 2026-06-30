@@ -77,6 +77,23 @@ HSNC_JETSTREAM_SSH_PASSWORD=admin \
 The backend reads the live baseline on start and polls the devices; run
 `hsnc-web serve` in another shell to use the UI against it.
 
+### Easiest path: the `controller` profile
+
+To run the whole app against the simulators without wiring any of this by hand,
+use the optional `controller` Compose profile. It builds the app image and starts
+it alongside the two mocks on a private network, using the bundled
+[`devices.yaml`](./devices.yaml) inventory (which pins the mocks to static IPs so
+both planes resolve from `ip`):
+
+```sh
+docker compose -f docker-compose.yml --profile controller up -d --build
+# open http://localhost:8088   (login: admin / admin)
+docker compose -f docker-compose.yml --profile controller down -v   # tear down
+```
+
+The UI is on host port **8088** to avoid clashing with a real-device controller
+on 8080.
+
 ## Mapping to the sample inventory (`config/devices.yaml`)
 
 | Sample device | Kind | Mock |

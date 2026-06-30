@@ -52,7 +52,7 @@ history. Each requirement traces to one or more ADRs.
 - **NFR-6 Extensibility:** new platforms via per-platform packages behind ports.
   (ADR 0011)
 - **NFR-7 Testability:** unit tests with fakes (no network/optional deps);
-  integration vs fake SSH; demo via mocks. (ADR 0013)
+  integration vs fake device simulators; demo via mocks. (ADR 0013)
 - **NFR-8 Deployability:** single Docker image, two s6 processes, shared volume,
   config seeding. (ADR 0012)
 - **NFR-9 Data retention:** prune runtime telemetry by `HSNC_RETENTION_DAYS`.

@@ -35,7 +35,7 @@ lint: ## Lint both packages with ruff.
 unit: ## Run the unit test suite (pytest) for both packages.
 	for pkg in $(PACKAGES); do (cd $$pkg && $(abspath $(PYTHON)) -m pytest) || exit 1; done
 
-integration: ## Run integration tests against the fake SSH devices (needs docker + paramiko).
+integration: ## Run integration tests against the fake device simulators (needs docker + paramiko).
 	PATH="$(PYBIN):$$PATH" bash $(SMOKE_TEST)
 
 up: ## Build and start the application container (end users); UI on http://localhost:8080.
@@ -48,10 +48,10 @@ down: ## Stop and remove the application container (data volume is kept).
 logs: ## Follow the application container logs (Ctrl-C to stop).
 	$(DOCKER) compose -f $(COMPOSE) logs -f
 
-fakes-up: ## Build and start the fake SSH device containers (detached).
+fakes-up: ## Build and start the fake device simulators (detached).
 	$(DOCKER) compose -f $(FAKES_COMPOSE) up -d --build
 
-fakes-down: ## Stop and remove the fake SSH device containers and their volumes.
+fakes-down: ## Stop and remove the fake device simulators and their volumes.
 	$(DOCKER) compose -f $(FAKES_COMPOSE) down -v
 
 docker-build: ## Build the application Docker image (override name with IMAGE=...).

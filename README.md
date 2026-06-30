@@ -16,13 +16,16 @@ access points** and **JetStream managed switches** (with VLANs).
 - **Packaging:** Docker container running supervised processes (web + REST backend) via s6-overlay
 
 > **Status:** The real device drivers (OpenWrt SSH/UCI and JetStream SSH/CLI) are
-> **fully implemented** and exercised by the test suite against the throwaway fake
-> SSH containers in [`fakes/`](fakes/). The bundled `docker-compose.yml` targets
+> **fully implemented** and exercised by the test suite against the throwaway
+> device simulators in [`fakes/`](fakes/), which answer **both planes** — the SSH
+> configuration plane and the non-SSH monitoring plane (a Prometheus exporter for
+> OpenWrt, an SNMPv3 agent for JetStream). The bundled `docker-compose.yml` targets
 > real hardware (`HSNC_USE_MOCK_DEVICES=0`) and requires your own
 > `config/devices.yaml`. For a hardware-free trial, set `HSNC_USE_MOCK_DEVICES=1`
 > to serve the runtime/monitoring plane from a built-in **mock provider** with a
 > sample inventory — VLAN, port and wireless editing plus the review/apply
-> workflow then work end-to-end without any devices.
+> workflow then work end-to-end without any devices. To exercise the **real**
+> drivers without hardware, run the [fake simulators](#quick-start-try-it-out-with-the-fake-simulators).
 
 ## Documentation
 
@@ -169,6 +172,40 @@ Default logins (change immediately): `admin` / `admin` and `viewer` / `viewer`.
 Data (YAML config, `desired_config.json`, `current_config.json`, `runtime.db` and
 `history.jsonl`) persists in the `controller-data` Docker volume.
 
+## Quick start (try it out with the fake simulators)
+
+Want to click around a live UI with no hardware *and* exercise the **real** device
+drivers (not the in-process mock)? The [`fakes/`](fakes/) directory ships two
+throwaway device simulators — an OpenWrt router/AP and a JetStream switch — that
+answer **both planes**: SSH for configuration and a non-SSH transport for
+monitoring (a Prometheus exporter for OpenWrt, an SNMPv3 agent for JetStream). An
+optional Compose **`controller`** profile builds the app image and points it at
+the two simulators over a private network:
+
+```bash
+docker compose -f fakes/docker-compose.yml --profile controller up -d --build
+# open http://localhost:8088   (login: admin / admin)
+```
+
+This starts three containers — `mock-openwrt`, `mock-jetstream` and
+`hsnc-controller`. The bundled [`fakes/devices.yaml`](fakes/devices.yaml) inventory
+wires three devices to the simulators (`gateway-1` and `ap-1` → OpenWrt,
+`switch-1` → JetStream), so the dashboard, live client lists, config editing and
+the review/apply workflow all run end-to-end through the real adapters over both
+planes.
+
+> The UI is published on host port **8088** (not 8080) so it never clashes with a
+> real-device controller you might already be running on 8080.
+
+Tear it all down, including the simulator state volumes, with:
+
+```bash
+docker compose -f fakes/docker-compose.yml --profile controller down -v
+```
+
+For the simulators on their own (no controller) and the SSH/SNMP self-tests, see
+[`fakes/README.md`](fakes/README.md).
+
 ## Quick start (local dev)
 
 The two packages install separately into the same virtualenv. The web frontend
@@ -195,11 +232,11 @@ list):
 make check        # fast syntax compile-check of all sources
 make lint         # ruff
 make unit         # unit tests (pytest)
-make integration  # smoke test against the fake SSH containers (needs docker)
+make integration  # smoke test against the fake device simulators (needs docker)
 make test         # unit + integration
 make all          # check + lint + test
-make fakes-up     # build & start the fake SSH devices (detached)
-make fakes-down   # stop and remove the fake devices
+make fakes-up     # build & start the fake device simulators (detached)
+make fakes-down   # stop and remove the fake device simulators
 make docker-build # build the production image
 make docker-clean # remove the production image
 ```

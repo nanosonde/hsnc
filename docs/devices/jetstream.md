@@ -154,15 +154,26 @@ From the HSNC host with `pysnmp` installed:
 
 ```sh
 python3 - <<'PY'
-from pysnmp.hlapi import *
-it = getCmd(SnmpEngine(),
-            UsmUserData('hsncmon', authKey='<AUTH>', privKey='<PRIV>',
-                        authProtocol=usmHMACSHAAuthProtocol,
-                        privProtocol=usmAesCfb128Protocol),
-            UdpTransportTarget(('192.168.50.2', 161)),
-            ContextData(),
-            ObjectType(ObjectIdentity('1.3.6.1.2.1.1.5.0')))
-print(next(it)[3])
+import asyncio
+from pysnmp.hlapi.v3arch.asyncio import (
+    SnmpEngine, UsmUserData, UdpTransportTarget, ContextData,
+    ObjectType, ObjectIdentity, get_cmd,
+    usmHMACSHAAuthProtocol, usmAesCfb128Protocol,
+)
+
+async def main():
+    transport = await UdpTransportTarget.create(('192.168.50.2', 161))
+    err_indication, err_status, _idx, var_binds = await get_cmd(
+        SnmpEngine(),
+        UsmUserData('hsncmon', authKey='<AUTH>', privKey='<PRIV>',
+                    authProtocol=usmHMACSHAAuthProtocol,
+                    privProtocol=usmAesCfb128Protocol),
+        transport,
+        ContextData(),
+        ObjectType(ObjectIdentity('1.3.6.1.2.1.1.5.0')))
+    print(err_indication or err_status or var_binds)
+
+asyncio.run(main())
 PY
 ```
 

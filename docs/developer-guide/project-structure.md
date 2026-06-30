@@ -31,7 +31,7 @@ hsncweb/               frontend package (dist: hsnc-web, import: hsncweb)
 config/                site.yaml, users.yaml, devices.yaml(.example)
 data/                  runtime: desired/current config, runtime.db, history.jsonl
 docker/                Dockerfile bits + s6-overlay service definitions
-fakes/                 throwaway SSH device simulators for integration tests
+fakes/                 throwaway device simulators (both planes) for integration tests
 docs/                  this documentation
 ```
 

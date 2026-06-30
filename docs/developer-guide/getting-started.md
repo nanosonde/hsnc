@@ -24,10 +24,10 @@ Point the frontend at a non-default backend with `HSNC_API_BASE_URL` (and
 make check        # fast compile-check of all sources
 make lint         # ruff
 make unit         # pytest (both packages)
-make integration  # smoke test against fake SSH containers (needs docker)
+make integration  # smoke test against fake device simulators (needs docker)
 make test         # unit + integration
 make all          # check + lint + test
-make fakes-up     # start fake SSH devices; fakes-down to stop
+make fakes-up     # start fake device simulators; fakes-down to stop
 ```
 
 Targets auto-use `.venv`; override with `make PYTHON=/path/to/python <target>`.
@@ -37,8 +37,9 @@ Or run tools directly: `(cd hsnc && pytest && ruff check src tests)`.
 
 - **Unit** tests use fakes (fake SSH runner, fake monitoring providers) — fast,
   no network, no `pysnmp` required.
-- **Integration** smoke tests run against the throwaway SSH simulators in
-  [`fakes/`](../../fakes/). The web suite has a golden-HTML safety net (regenerate
+- **Integration** smoke tests run against the throwaway device simulators in
+  [`fakes/`](../../fakes/), which answer both planes (SSH config + Prometheus/
+  SNMPv3 monitoring). The web suite has a golden-HTML safety net (regenerate
   with `REGEN_GOLDEN=1` only when templates intentionally change).
 
 ## House rules
