@@ -114,8 +114,9 @@ class Container:
         )
 
         # connection-plane + monitoring-plane wiring. Real SSH adapters own all
-        # device I/O; read endpoints serve the latest runtime snapshot, kept
-        # fresh by the poll loop scraping live monitoring.
+        # device configuration I/O; the monitoring plane never uses SSH. Read
+        # endpoints serve the latest runtime snapshot, kept fresh by the poll
+        # loop scraping live monitoring (Prometheus / SNMPv3).
         self.ssh_resolver = SshConnectionResolver(settings.ssh)
         self.runner_registry = PersistentRunnerRegistry()
         self.adapters = DefaultDeviceAdapterFactory(
@@ -125,8 +126,6 @@ class Container:
         )
         poll_monitoring = DefaultMonitoringProviderFactory(
             use_mock=settings.use_mock_devices,
-            resolver=self.ssh_resolver,
-            runner_factory=self.runner_registry.get,
         )
         self.monitoring = RuntimeStoreMonitoringFactory(self.runtime)
 

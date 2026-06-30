@@ -1,13 +1,13 @@
-"""JetStream runtime monitoring over SNMPv3 — secondary source.
+"""JetStream runtime monitoring over SNMPv3.
 
-Polls a TP-Link JetStream switch via SNMPv3 (USM, ``authPriv`` by default)
-instead of the interactive SSH CLI. This is the *secondary* monitoring
-connection, selected per device via ``monitoring.source: secondary`` with
-``monitoring.secondary.type: snmp``.
+The monitoring plane never uses SSH: JetStream switches are polled via SNMPv3
+(USM, ``authPriv`` by default). The JetStream platform always uses this provider
+for live runtime data (the SSH CLI is reserved for the configuration plane).
 
-Only the non-secret target (host/port) lives in ``devices.yaml``; the SNMPv3
-user and auth/priv keys come from the environment (``HSNC_SNMP_*`` globals and
-per-device ``HSNC_DEVICE_<ID>_SNMP_*`` overrides).
+Only the non-secret target (host/port) lives in ``devices.yaml`` (and may be
+omitted to derive it from the device IP); the SNMPv3 user and auth/priv keys come
+from the environment (``HSNC_SNMP_*`` globals and per-device
+``HSNC_DEVICE_<ID>_SNMP_*`` overrides).
 
 ``pysnmp`` is an optional dependency (the ``snmp`` extra) and is imported lazily,
 so the rest of the application — and the unit tests, which inject a fake
@@ -118,12 +118,12 @@ class SnmpConnectionSettings:
         )
 
     def resolve(self, device: Device) -> SnmpTarget:
-        secondary = device.monitoring.secondary if device.monitoring else None
-        host = (secondary.endpoint if secondary and secondary.endpoint else "").strip()
-        port = secondary.port if secondary and secondary.port else self.port
+        target = device.monitoring.target if device.monitoring else None
+        host = (target.endpoint if target and target.endpoint else "").strip()
+        port = target.port if target and target.port else self.port
         if host and ":" in host and "[" not in host:
             host, _, raw_port = host.rpartition(":")
-            if raw_port.isdigit() and not (secondary and secondary.port):
+            if raw_port.isdigit() and not (target and target.port):
                 port = int(raw_port)
         if not host:
             if device.ip is None:
@@ -148,7 +148,7 @@ def _default_client_factory(target: SnmpTarget) -> SnmpClient:
 
 
 class JetStreamSnmpMonitoringProvider(MonitoringProvider):
-    """Reads JetStream runtime state over SNMPv3 as the secondary source."""
+    """Reads JetStream runtime state over SNMPv3."""
 
     def __init__(
         self,

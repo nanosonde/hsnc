@@ -45,48 +45,43 @@ class ConnectionSchema(BaseModel):
     username: str = ""
 
 
-class SecondaryMonitoringSchema(BaseModel):
-    type: str = ""  # prometheus | snmp
-    endpoint: str = ""
-    port: int = Field(default=0, ge=0, le=65535)
+_REMOVED_MONITORING_KEYS = ("source", "secondary", "type")
 
 
 class MonitoringSchema(BaseModel):
     """Per-device monitoring config.
 
-    Canonical form::
+    The monitoring plane never uses SSH; the transport is fixed by platform
+    (Prometheus for OpenWrt, SNMPv3 for JetStream), so only the on/off flag and
+    an optional endpoint override are configurable::
 
         monitoring:
-          source: primary | secondary | none
-          secondary:
-            type: prometheus | snmp
-            endpoint: "http://host:9100/metrics"   # or snmp host[:port]
-            port: 161
+          enabled: true                              # default; false disables polling
+          endpoint: "http://host:9100/metrics"       # optional; SNMP host[:port] for switches
+          port: 161                                  # optional, SNMP only (default 161)
 
-    The legacy flat form (``monitoring: {type: ssh|none|prometheus|snmp}``) is
-    still accepted and normalised into the canonical form for backward
-    compatibility.
+    When ``endpoint`` is omitted it is derived from the device's management IP.
     """
 
-    source: str = "primary"  # primary | secondary | none
-    secondary: SecondaryMonitoringSchema | None = None
+    enabled: bool = True
+    endpoint: str = ""
+    port: int = Field(default=0, ge=0, le=65535)
 
     @model_validator(mode="before")
     @classmethod
-    def _accept_legacy(cls, data: object) -> object:
+    def _reject_removed_keys(cls, data: object) -> object:
         if not isinstance(data, dict):
             return data
-        # New form already (or empty) — keep only canonical keys.
-        if "source" in data or "secondary" in data or "type" not in data:
-            return {k: v for k, v in data.items() if k in ("source", "secondary")}
-        # Legacy flat form: {type: ssh|none|prometheus|snmp, endpoint: ...}.
-        legacy = str(data.get("type") or "").lower()
-        endpoint = data.get("endpoint", "")
-        if legacy in ("prometheus", "snmp"):
-            return {"source": "secondary", "secondary": {"type": legacy, "endpoint": endpoint}}
-        if legacy == "none":
-            return {"source": "none"}
-        return {"source": "primary"}
+        present = [key for key in _REMOVED_MONITORING_KEYS if key in data]
+        if present:
+            raise ValueError(
+                "monitoring keys "
+                + ", ".join(repr(key) for key in present)
+                + " were removed: the monitoring plane no longer uses SSH and the "
+                "primary/secondary model is gone. Use `enabled`, `endpoint` and "
+                "`port` instead. See docs/devices/."
+            )
+        return data
 
 
 class DeviceSchema(BaseModel):

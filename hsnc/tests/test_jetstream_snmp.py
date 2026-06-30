@@ -1,4 +1,4 @@
-"""Tests for the JetStream SNMPv3 (secondary) monitoring provider."""
+"""Tests for the JetStream SNMPv3 monitoring provider."""
 
 from __future__ import annotations
 
@@ -8,7 +8,7 @@ from hsnc.devices.jetstream.snmp_monitoring import (
     SnmpTarget,
     _mac_from_fdb_oid,
 )
-from hsnc.entities import Device, MonitoringConfig, SecondaryMonitoring
+from hsnc.entities import Device, MonitoringConfig, MonitoringTarget
 from hsnc.enums import ConnectionType, DeviceKind, DeviceStatus
 from hsnc.value_objects import IpAddress
 
@@ -35,13 +35,13 @@ class _FakeSnmpClient:
         return list(_FDB)
 
 
-def _device(secondary: SecondaryMonitoring | None = None, ip: str = "10.0.0.6") -> Device:
+def _device(target: MonitoringTarget | None = None, ip: str = "10.0.0.6") -> Device:
     return Device(
         id="switch-1",
         name="SW One",
         kind=DeviceKind.SWITCH,
         ip=IpAddress(ip),
-        monitoring=MonitoringConfig(source="secondary", secondary=secondary),
+        monitoring=MonitoringConfig(target=target),
     )
 
 
@@ -61,7 +61,7 @@ def test_mac_from_fdb_oid_rejects_short_oid() -> None:
 
 
 def test_fetch_status_parses_sys_group() -> None:
-    result = _provider().fetch_status(_device(SecondaryMonitoring(type="snmp")))
+    result = _provider().fetch_status(_device())
     assert result.status is DeviceStatus.CONNECTED
     assert result.name == "core-switch"
     assert result.model == "JetStream Gigabit Smart Switch"
@@ -69,7 +69,7 @@ def test_fetch_status_parses_sys_group() -> None:
 
 
 def test_fetch_clients_walks_fdb() -> None:
-    clients = _provider().fetch_clients(_device(SecondaryMonitoring(type="snmp")))
+    clients = _provider().fetch_clients(_device())
     assert {str(c.mac) for c in clients} == {"00:11:22:AA:BB:01", "00:11:22:AA:BB:03"}
     assert all(c.connection is ConnectionType.WIRED for c in clients)
     first = next(c for c in clients if str(c.mac) == "00:11:22:AA:BB:01")
@@ -79,7 +79,7 @@ def test_fetch_clients_walks_fdb() -> None:
 def test_settings_resolve_uses_endpoint_and_port() -> None:
     settings = SnmpConnectionSettings(port=161)
     target = settings.resolve(
-        _device(SecondaryMonitoring(type="snmp", endpoint="10.5.5.5", port=1610))
+        _device(MonitoringTarget(endpoint="10.5.5.5", port=1610))
     )
     assert target.host == "10.5.5.5"
     assert target.port == 1610
@@ -87,16 +87,14 @@ def test_settings_resolve_uses_endpoint_and_port() -> None:
 
 def test_settings_resolve_parses_host_port_in_endpoint() -> None:
     settings = SnmpConnectionSettings()
-    target = settings.resolve(
-        _device(SecondaryMonitoring(type="snmp", endpoint="10.5.5.5:1620"))
-    )
+    target = settings.resolve(_device(MonitoringTarget(endpoint="10.5.5.5:1620")))
     assert target.host == "10.5.5.5"
     assert target.port == 1620
 
 
 def test_settings_resolve_derives_host_from_ip() -> None:
     settings = SnmpConnectionSettings()
-    target = settings.resolve(_device(SecondaryMonitoring(type="snmp")))
+    target = settings.resolve(_device())
     assert target.host == "10.0.0.6"
     assert target.port == 161
 
@@ -114,6 +112,6 @@ def test_settings_from_env_global_and_per_device() -> None:
     )
     assert settings.credentials.user == "monitor"
     assert settings.port == 1161
-    target = settings.resolve(_device(SecondaryMonitoring(type="snmp")))
+    target = settings.resolve(_device())
     assert target.credentials.user == "switchuser"
     assert target.port == 2161

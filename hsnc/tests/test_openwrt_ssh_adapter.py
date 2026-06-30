@@ -2,27 +2,15 @@
 
 from __future__ import annotations
 
-import json
-
 from hsnc.devices.openwrt.adapter import OpenWrtSshAdapter
-from hsnc.devices.openwrt.ssh_monitoring import OpenWrtSshMonitoringProvider
 from hsnc.devices.ssh_transport import (
     FakeSshRunner,
     SshConnectionResolver,
     SshConnectionSettings,
 )
 from hsnc.entities import Device
-from hsnc.enums import ConnectionType, DeviceKind, DeviceStatus, PortMode
+from hsnc.enums import DeviceKind, PortMode
 from hsnc.value_objects import IpAddress, MacAddress
-
-_BOARD = json.dumps(
-    {
-        "hostname": "gateway-1",
-        "model": "TP-Link ER605 (mock)",
-        "release": {"distribution": "OpenWrt", "version": "23.05.3"},
-    }
-)
-_LAN_STATUS = json.dumps({"up": True, "uptime": 4242, "ipv4-address": []})
 
 _UCI_SYSTEM = "system.@system[0]=system\nsystem.@system[0].hostname='gw-edge'\n"
 _UCI_NETWORK = (
@@ -41,18 +29,6 @@ _UCI_WIRELESS = (
     "wireless.@wifi-iface[1]=wifi-iface\n"
     "wireless.@wifi-iface[1].ssid='HomeNet-Guest'\n"
 )
-_LEASES = json.dumps(
-    {
-        "device": {
-            "br-lan": {
-                "ipv4-leases": [
-                    {"mac": "1c:61:b4:00:11:22", "address": "192.168.50.20", "hostname": "desktop"},
-                    {"mac": "a4:83:e7:00:33:44", "address": "192.168.50.21", "hostname": ""},
-                ]
-            }
-        }
-    }
-)
 
 
 def _device() -> Device:
@@ -69,28 +45,6 @@ def _device() -> Device:
 def _adapter(runner: FakeSshRunner) -> OpenWrtSshAdapter:
     resolver = SshConnectionResolver(SshConnectionSettings())
     return OpenWrtSshAdapter(resolver=resolver, runner_factory=lambda target: runner)
-
-
-def _monitor(runner: FakeSshRunner) -> OpenWrtSshMonitoringProvider:
-    resolver = SshConnectionResolver(SshConnectionSettings())
-    return OpenWrtSshMonitoringProvider(
-        resolver=resolver, runner_factory=lambda target: runner
-    )
-
-
-def test_fetch_status_parses_board_and_uptime() -> None:
-    runner = FakeSshRunner(
-        {
-            "ubus call system board": _BOARD,
-            "ubus call network.interface.lan status": _LAN_STATUS,
-        }
-    )
-    device = _monitor(runner).fetch_status(_device())
-
-    assert device.status is DeviceStatus.CONNECTED
-    assert device.firmware == "23.05.3"
-    assert device.model == "TP-Link ER605 (mock)"
-    assert device.uptime_seconds == 4242
 
 
 def test_fetch_config_parses_vlans_ports_and_ssids() -> None:
@@ -113,34 +67,6 @@ def test_fetch_config_parses_vlans_ports_and_ssids() -> None:
     assert ports[1].mode is PortMode.ACCESS
     assert ports[3].mode is PortMode.TRUNK
     assert ports[3].tagged_vlans == [10]
-
-
-def test_fetch_clients_from_dhcp_leases() -> None:
-    runner = FakeSshRunner({"ubus call dhcp ipv4leases": _LEASES})
-    clients = _monitor(runner).fetch_clients(_device())
-
-    assert [str(c.mac) for c in clients] == ["1C:61:B4:00:11:22", "A4:83:E7:00:33:44"]
-    assert clients[0].name == "desktop"
-    assert clients[0].connection is ConnectionType.WIRED
-    assert str(clients[0].ip) == "192.168.50.20"
-
-
-def test_fetch_clients_falls_back_to_lease_file_without_odhcpd() -> None:
-    leases = (
-        "1700000000 1c:61:b4:00:11:22 192.168.50.20 desktop 01:1c:61:b4:00:11:22\n"
-        "1700000100 a4:83:e7:00:33:44 192.168.50.21 * 01:a4:83:e7:00:33:44\n"
-    )
-    runner = FakeSshRunner(
-        {"cat /tmp/dhcp.leases": leases},
-        errors=["ubus call dhcp ipv4leases"],
-    )
-    clients = _monitor(runner).fetch_clients(_device())
-
-    assert [str(c.mac) for c in clients] == ["1C:61:B4:00:11:22", "A4:83:E7:00:33:44"]
-    assert clients[0].name == "desktop"
-    assert str(clients[0].ip) == "192.168.50.20"
-    # Hostname "*" in the lease file falls back to the MAC as the display name.
-    assert clients[1].name == "A4:83:E7:00:33:44"
 
 
 def test_fetch_config_is_authoritative_and_clears_stale_entries() -> None:

@@ -1,7 +1,7 @@
 """OpenWrt device adapter (gateway / access point) over SSH + UCI.
 
 Configuration plane only — runtime/monitoring data lives in
-:class:`~hsnc.devices.openwrt.ssh_monitoring.OpenWrtSshMonitoringProvider`.
+:class:`~hsnc.devices.openwrt.prometheus_monitoring.OpenWrtPrometheusMonitoringProvider`.
 Talks to OpenWrt-based devices using the same ``uci`` surface the mock container
 emulates:
 

@@ -5,7 +5,6 @@ from __future__ import annotations
 import pytest
 
 from hsnc.devices.jetstream.adapter import JetStreamCliAdapter
-from hsnc.devices.jetstream.ssh_monitoring import JetStreamSshMonitoringProvider
 from hsnc.devices.ssh_transport import (
     FakeSshRunner,
     SshConnectionResolver,
@@ -13,17 +12,8 @@ from hsnc.devices.ssh_transport import (
     SshError,
 )
 from hsnc.entities import Device, SwitchPort, Vlan
-from hsnc.enums import ConnectionType, DeviceKind, DeviceStatus, PortMode
+from hsnc.enums import DeviceKind, PortMode
 from hsnc.value_objects import IpAddress, MacAddress
-
-_SYSTEM_INFO = (
-    "Device Description - JetStream Gigabit Smart Switch (mock)\n"
-    "Device Name        - TL-SG2210P\n"
-    "Device Model       - TL-SG2210P\n"
-    "Software Version   - 5.0.6 Build 20231010 (mock)\n"
-    "MAC Address        - 00-11-22-33-44-02\n"
-    "Running Time       - 3 days 04:21:09\n"
-)
 
 _RUNNING_CONFIG = (
     "#\n"
@@ -46,13 +36,6 @@ _RUNNING_CONFIG = (
     " shutdown\n"
     "#\n"
     "end\n"
-)
-
-_MAC_TABLE = (
-    "MAC Address        VLAN   Port      Type\n"
-    "-----------------  -----  --------  -------\n"
-    "00-11-22-aa-bb-01  10     Gi1/0/1   dynamic\n"
-    "00-11-22-aa-bb-03  20     Gi1/0/3   dynamic\n"
 )
 
 # Real capture from a TP-Link SG2005P-PD: quoted names, an `interface vlan` SVI,
@@ -109,25 +92,6 @@ def _adapter(runner: FakeSshRunner) -> JetStreamCliAdapter:
     return JetStreamCliAdapter(resolver=resolver, runner_factory=lambda target: runner)
 
 
-def _monitor(runner: FakeSshRunner) -> JetStreamSshMonitoringProvider:
-    resolver = SshConnectionResolver(SshConnectionSettings())
-    return JetStreamSshMonitoringProvider(
-        resolver=resolver, runner_factory=lambda target: runner
-    )
-
-
-def test_fetch_status_parses_system_info() -> None:
-    runner = FakeSshRunner(shell_output=_SYSTEM_INFO)
-    device = _monitor(runner).fetch_status(_device())
-
-    assert runner.shell_invocations == [["show system-info"]]
-    assert device.status is DeviceStatus.CONNECTED
-    assert device.model == "TL-SG2210P"
-    assert device.firmware == "5.0.6 Build 20231010 (mock)"
-    assert str(device.mac) == "00:11:22:33:44:02"
-    assert device.uptime_seconds == 3 * 86400 + 4 * 3600 + 21 * 60 + 9
-
-
 def test_fetch_config_parses_vlans_and_ports() -> None:
     runner = FakeSshRunner(shell_output=_RUNNING_CONFIG)
     device = _adapter(runner).fetch_config(_device())
@@ -166,16 +130,6 @@ def test_fetch_config_parses_real_sg2005p_running_config() -> None:
     # Tagged members -> trunk.
     assert ports[5].mode is PortMode.TRUNK
     assert ports[5].tagged_vlans == [5, 20, 30, 40]
-
-
-def test_fetch_clients_from_mac_table() -> None:
-    runner = FakeSshRunner(shell_output=_MAC_TABLE)
-    clients = _monitor(runner).fetch_clients(_device())
-
-    assert runner.shell_invocations == [["show mac address-table"]]
-    assert [str(c.mac) for c in clients] == ["00:11:22:AA:BB:01", "00:11:22:AA:BB:03"]
-    assert clients[0].connection is ConnectionType.WIRED
-    assert clients[0].ap_or_port == "Gi1/0/1"
 
 
 def test_fetch_config_is_authoritative_and_clears_stale_entries() -> None:

@@ -1,21 +1,19 @@
 """Monitoring providers — the runtime/monitoring plane.
 
-Separated from the SSH *configuration* adapters so runtime data can come from a
-different source than SSH. Each platform owns its providers:
+Separated from the SSH *configuration* adapters: the monitoring plane never uses
+SSH. The transport is fixed by platform:
 
-* OpenWrt — :class:`~hsnc.devices.openwrt.ssh_monitoring.OpenWrtSshMonitoringProvider`
-  (primary, ``ubus`` over SSH) and
+* OpenWrt gateways/APs —
   :class:`~hsnc.devices.openwrt.prometheus_monitoring.OpenWrtPrometheusMonitoringProvider`
-  (secondary, Prometheus node-exporter).
-* JetStream — :class:`~hsnc.devices.jetstream.ssh_monitoring.JetStreamSshMonitoringProvider`
-  (primary, SSH CLI) and
+  (Prometheus node-exporter).
+* JetStream switches —
   :class:`~hsnc.devices.jetstream.snmp_monitoring.JetStreamSnmpMonitoringProvider`
-  (secondary, SNMPv3).
+  (SNMPv3).
 
-:class:`DefaultMonitoringProviderFactory` picks the provider per device from the
-device's ``monitoring.source`` (primary / secondary / none). When no monitoring
-source is available, :class:`NullMonitoringProvider` reports the device as
-``DeviceStatus.UNKNOWN`` with no clients rather than inventing data.
+:class:`DefaultMonitoringProviderFactory` picks the provider per device by kind.
+A device with ``monitoring.enabled: false`` (or no usable transport) gets
+:class:`NullMonitoringProvider`, which reports ``DeviceStatus.UNKNOWN`` with no
+clients rather than inventing data.
 """
 
 from __future__ import annotations
@@ -31,16 +29,9 @@ from .jetstream.snmp_monitoring import (
     JetStreamSnmpMonitoringProvider,
     SnmpConnectionSettings,
 )
-from .jetstream.ssh_monitoring import JetStreamSshMonitoringProvider
 from .openwrt.prometheus_monitoring import (
     OpenWrtPrometheusMonitoringProvider,
     PrometheusSettings,
-)
-from .openwrt.ssh_monitoring import OpenWrtSshMonitoringProvider
-from .ssh_transport import (
-    RunnerFactory,
-    SshConnectionResolver,
-    default_runner_factory,
 )
 
 _logger = logging.getLogger(__name__)
@@ -49,9 +40,9 @@ _logger = logging.getLogger(__name__)
 class NullMonitoringProvider(MonitoringProvider):
     """No monitoring source: report reachability as unknown, no clients.
 
-    Used for devices with ``monitoring.source: none`` and for misconfigured
-    secondary sources, so the UI honestly shows "unknown" instead of fabricated
-    data.
+    Used for devices with ``monitoring.enabled: false`` and for devices whose
+    platform has no monitoring transport, so the UI honestly shows "unknown"
+    instead of fabricated data.
     """
 
     def fetch_status(self, device: Device) -> Device:
@@ -125,41 +116,30 @@ class MockMonitoringProvider(MonitoringProvider):
 
 
 class DefaultMonitoringProviderFactory(MonitoringProviderFactory):
-    """Routes devices to a monitoring provider by ``monitoring.source``.
+    """Routes devices to a monitoring provider by platform/kind.
 
-    In mock mode every device uses :class:`MockMonitoringProvider`. Otherwise
-    selection is strict (no SSH fallback):
+    The monitoring plane never uses SSH. In mock mode every device uses
+    :class:`MockMonitoringProvider`. Otherwise:
 
-    * ``source == "none"`` -> :class:`NullMonitoringProvider`.
-    * ``source == "primary"`` (default) -> SSH scrape by device kind
-      (switch -> JetStream CLI; gateway/AP -> OpenWrt ``ubus``).
-    * ``source == "secondary"`` -> the device's secondary transport
-      (``prometheus`` -> OpenWrt exporter; ``snmp`` -> JetStream SNMPv3).
+    * ``monitoring.enabled == False`` -> :class:`NullMonitoringProvider`.
+    * switch -> :class:`JetStreamSnmpMonitoringProvider` (SNMPv3).
+    * gateway / access point -> :class:`OpenWrtPrometheusMonitoringProvider`
+      (Prometheus node-exporter).
+    * any other kind -> :class:`NullMonitoringProvider` (reports ``UNKNOWN``).
 
-    A device configured for ``secondary`` with a missing/unknown
-    ``secondary.type`` logs a warning and falls back to
-    :class:`NullMonitoringProvider` (reports ``UNKNOWN``) so the
-    misconfiguration is visible rather than masked.
+    An unreachable or misconfigured endpoint reports ``UNKNOWN`` rather than
+    masking the problem; there is no SSH fallback.
     """
 
     def __init__(
         self,
         use_mock: bool = True,
-        resolver: SshConnectionResolver | None = None,
-        runner_factory: RunnerFactory = default_runner_factory,
         prometheus_settings: PrometheusSettings | None = None,
         snmp_settings: SnmpConnectionSettings | None = None,
     ) -> None:
         self._use_mock = use_mock
         self._mock = MockMonitoringProvider()
         self._null = NullMonitoringProvider()
-        resolver = resolver or SshConnectionResolver()
-        self._openwrt_ssh = OpenWrtSshMonitoringProvider(
-            resolver=resolver, runner_factory=runner_factory
-        )
-        self._jetstream_ssh = JetStreamSshMonitoringProvider(
-            resolver=resolver, runner_factory=runner_factory
-        )
         self._openwrt_prometheus = OpenWrtPrometheusMonitoringProvider(
             settings=prometheus_settings or PrometheusSettings.from_env()
         )
@@ -170,32 +150,15 @@ class DefaultMonitoringProviderFactory(MonitoringProviderFactory):
     def for_device(self, device: Device) -> MonitoringProvider:
         if self._use_mock:
             return self._mock
-        source = (device.monitoring.source if device.monitoring else "primary") or "primary"
-        source = source.lower()
-        if source == "none":
+        if device.monitoring is not None and not device.monitoring.enabled:
             return self._null
-        if source == "secondary":
-            return self._secondary_for(device)
-        return self._primary_for(device)
-
-    def _primary_for(self, device: Device) -> MonitoringProvider:
         if device.kind is DeviceKind.SWITCH:
-            return self._jetstream_ssh
-        if device.kind in (DeviceKind.GATEWAY, DeviceKind.ACCESS_POINT):
-            return self._openwrt_ssh
-        return self._null
-
-    def _secondary_for(self, device: Device) -> MonitoringProvider:
-        secondary = device.monitoring.secondary if device.monitoring else None
-        kind = (secondary.type if secondary and secondary.type else "").lower()
-        if kind == "prometheus":
-            return self._openwrt_prometheus
-        if kind == "snmp":
             return self._jetstream_snmp
+        if device.kind in (DeviceKind.GATEWAY, DeviceKind.ACCESS_POINT):
+            return self._openwrt_prometheus
         _logger.warning(
-            "device %r has monitoring.source=secondary but no/unknown "
-            "secondary.type (%r); reporting UNKNOWN",
+            "device %r has kind %r with no monitoring transport; reporting UNKNOWN",
             device.id,
-            kind,
+            device.kind,
         )
         return self._null

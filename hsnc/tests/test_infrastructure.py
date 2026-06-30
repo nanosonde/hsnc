@@ -41,7 +41,8 @@ DEVICES_YAML = (
     "      username: admin\n"
     "      port: 22\n"
     "    monitoring:\n"
-    "      type: ssh\n"
+    "      enabled: true\n"
+    "      endpoint: 192.168.50.2:161\n"
 )
 
 
@@ -64,20 +65,27 @@ def test_yaml_config_repository_reads(config_dir):
     assert device.connection is not None
     assert device.connection.username == "admin"
     assert device.monitoring is not None
-    assert device.monitoring.source == "primary"
+    assert device.monitoring.enabled is True
+    assert device.monitoring.target is not None
+    assert device.monitoring.target.endpoint == "192.168.50.2:161"
 
 
-def test_monitoring_schema_accepts_legacy_secondary_form():
+def test_monitoring_schema_rejects_removed_keys():
+    import pytest
+    from pydantic import ValidationError
+
     from hsnc.config.schemas import MonitoringSchema
 
-    schema = MonitoringSchema.model_validate({"type": "prometheus", "endpoint": "http://x/m"})
-    assert schema.source == "secondary"
-    assert schema.secondary is not None
-    assert schema.secondary.type == "prometheus"
-    assert schema.secondary.endpoint == "http://x/m"
+    for removed in ({"source": "primary"}, {"secondary": {}}, {"type": "prometheus"}):
+        with pytest.raises(ValidationError):
+            MonitoringSchema.model_validate(removed)
 
-    assert MonitoringSchema.model_validate({"type": "none"}).source == "none"
-    assert MonitoringSchema.model_validate({"type": "ssh"}).source == "primary"
+    schema = MonitoringSchema.model_validate(
+        {"enabled": False, "endpoint": "http://x/m", "port": 9100}
+    )
+    assert schema.enabled is False
+    assert schema.endpoint == "http://x/m"
+    assert schema.port == 9100
 
 
 

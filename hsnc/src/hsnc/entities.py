@@ -94,17 +94,18 @@ class DeviceConnection:
 
 
 @dataclass
-class SecondaryMonitoring:
-    """A device's secondary (non-SSH) runtime-telemetry channel.
+class MonitoringTarget:
+    """How to reach a device's runtime-telemetry endpoint.
 
-    Describes *how* to reach an alternate monitoring source. Secrets (SNMPv3
-    auth/priv keys, a Prometheus bearer token) are never stored here — they come
-    from the environment, like SSH passwords. Only the non-secret target lives in
-    the inventory.
+    The monitoring plane never uses SSH: OpenWrt devices are scraped over a
+    Prometheus exporter and JetStream switches over SNMPv3. This holds only the
+    non-secret target; when ``endpoint`` is empty it is derived from the device's
+    management IP (``http://<ip>:9100/metrics`` for Prometheus, ``<ip>:161`` for
+    SNMP). Secrets (SNMPv3 auth/priv keys, a Prometheus bearer token) never live
+    here — they come from the environment, like SSH passwords.
     """
 
-    type: str = ""  # prometheus | snmp
-    endpoint: str = ""  # prometheus URL, or SNMP host[:port]
+    endpoint: str = ""  # prometheus URL, or SNMP host[:port]; "" -> derive from IP
     port: int = 0  # SNMP UDP port (0 -> default 161); ignored for prometheus
 
 
@@ -112,22 +113,21 @@ class SecondaryMonitoring:
 class MonitoringConfig:
     """Per-device monitoring (runtime-polling) configuration.
 
-    The configuration plane is always SSH. This selects *which* channel the poll
-    loop uses to read live runtime data:
+    The configuration plane is always SSH; the monitoring plane never is. The
+    transport is fixed by platform — Prometheus for OpenWrt gateways/APs, SNMPv3
+    for JetStream switches — so there is nothing to select here beyond:
 
-    * ``source == "primary"`` (default) — scrape over the same SSH plane
-      (OpenWrt ``ubus`` / JetStream CLI).
-    * ``source == "secondary"`` — use the device's :attr:`secondary` channel
-      (Prometheus exporter for OpenWrt, SNMPv3 for switches).
-    * ``source == "none"`` — disable live polling for the device.
+    * ``enabled`` (default ``True``) — poll the device for live runtime data.
+      Set ``False`` to disable polling; the device then reports ``UNKNOWN``.
+    * :attr:`target` — optional non-secret endpoint override; when omitted the
+      endpoint is derived from the device's management IP.
 
-    Selection is strict: when ``secondary`` is chosen there is no SSH fallback, so
-    a device with an unreachable secondary reports ``UNKNOWN`` rather than masking
-    the misconfiguration.
+    An unreachable or misconfigured endpoint reports ``UNKNOWN`` rather than
+    masking the problem; there is no SSH fallback.
     """
 
-    source: str = "primary"  # primary | secondary | none
-    secondary: SecondaryMonitoring | None = None
+    enabled: bool = True
+    target: MonitoringTarget | None = None
 
 
 @dataclass
@@ -151,8 +151,8 @@ class Device:
     ssids: list[str] = field(default_factory=list)
     # optional SSH connection override (host/port/user); None -> derive from ip
     connection: DeviceConnection | None = None
-    # optional monitoring/runtime-polling config (primary SSH vs secondary); None
-    # -> primary SSH scrape
+    # optional monitoring/runtime-polling config (enabled flag + endpoint
+    # override); None -> polling enabled with an IP-derived endpoint
     monitoring: MonitoringConfig | None = None
 
 

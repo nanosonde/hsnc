@@ -13,16 +13,14 @@
 #
 # kind: gateway | switch | access_point
 # connection: SSH details (passwords come from the environment, never this file)
-# monitoring:  live runtime-polling channel. Configuration is always over SSH;
-#   this only selects where live status/clients are read from:
-#     source: primary | secondary | none   (default: primary)
-#       primary   -> scrape over SSH (OpenWrt ubus / JetStream CLI)
-#       secondary -> use the per-device `secondary` channel below
-#       none      -> disable live polling (device shows "unknown")
-#     secondary:                            (only used when source: secondary)
-#       type: prometheus | snmp
-#       endpoint: prometheus URL, or SNMP host[:port]
-#       port: SNMP UDP port (default 161; ignored for prometheus)
+# monitoring:  live runtime-polling. The configuration plane is always SSH; the
+#   monitoring plane NEVER uses SSH. The transport is fixed by platform —
+#   OpenWrt gateways/APs are scraped over a Prometheus node-exporter and
+#   JetStream switches over SNMPv3 — so there is nothing to select here:
+#     enabled:  poll the device for live data (default true; false -> "unknown")
+#     endpoint: optional override. When omitted it is derived from the device IP
+#               (http://<ip>:9100/metrics for Prometheus, <ip>:161 for SNMP).
+#     port:     optional SNMP UDP port (default 161; ignored for Prometheus).
 #   Secrets (SNMPv3 keys, Prometheus token) are NEVER stored here — they come
 #   from the environment. See docs/devices/ for per-platform setup.
 devices:
@@ -34,8 +32,9 @@ devices:
     connection:
       username: root
       port: 22
+    # OpenWrt -> Prometheus exporter; endpoint derived from the IP by default.
     monitoring:
-      source: primary
+      enabled: true
 
   - id: switch-1
     name: TL-SG2210P
@@ -45,14 +44,12 @@ devices:
     connection:
       username: admin
       port: 22
+    # JetStream -> SNMPv3; host/port derived from the IP by default. Override
+    # the endpoint/port explicitly if the switch answers SNMP elsewhere:
+    #   endpoint: 192.168.50.2
+    #   port: 161
     monitoring:
-      source: primary
-    # Secondary polling over SNMPv3 (see docs/devices/jetstream.md):
-    #   source: secondary
-    #   secondary:
-    #     type: snmp
-    #     endpoint: 192.168.50.2
-    #     port: 161
+      enabled: true
 
   - id: ap-1
     name: EAP245
@@ -62,13 +59,11 @@ devices:
     connection:
       username: root
       port: 22
+    # OpenWrt -> Prometheus exporter. Override the endpoint if it is not the
+    # default http://<ip>:9100/metrics:
+    #   endpoint: http://192.168.50.3:9100/metrics
     monitoring:
-      source: primary
-    # Secondary polling over a Prometheus exporter (see docs/devices/openwrt.md):
-    #   source: secondary
-    #   secondary:
-    #     type: prometheus
-    #     endpoint: http://192.168.50.3:9100/metrics
+      enabled: true
 
   - id: switch-2
     name: GS1900-OWRT
@@ -79,4 +74,4 @@ devices:
       username: root
       port: 22
     monitoring:
-      source: primary
+      enabled: true

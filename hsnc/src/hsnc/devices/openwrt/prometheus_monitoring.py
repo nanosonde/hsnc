@@ -1,12 +1,12 @@
-"""OpenWrt runtime monitoring over a Prometheus exporter — secondary source.
+"""OpenWrt runtime monitoring over a Prometheus exporter.
 
-Polls an OpenWrt device's Prometheus node-exporter endpoint (e.g.
-``prometheus-node-exporter-lua``) instead of scraping over SSH. This is the
-*secondary* monitoring connection, selected per device via
-``monitoring.source: secondary`` with ``monitoring.secondary.type: prometheus``.
+The monitoring plane never uses SSH: OpenWrt devices are polled over a Prometheus
+node-exporter endpoint (e.g. ``prometheus-node-exporter-lua``). The OpenWrt
+platform always uses this provider for live runtime data.
 
-Only the non-secret endpoint lives in ``devices.yaml``; an optional bearer token
-comes from the environment (``HSNC_PROMETHEUS_TOKEN`` or the per-device
+Only the non-secret endpoint lives in ``devices.yaml`` (and may be omitted to
+derive it from the device IP); an optional bearer token comes from the
+environment (``HSNC_PROMETHEUS_TOKEN`` or the per-device
 ``HSNC_DEVICE_<ID>_PROMETHEUS_TOKEN``).
 
 Client enumeration relies on the exporter's wifi collector exposing per-station
@@ -72,8 +72,8 @@ class PrometheusSettings:
         )
 
     def resolve(self, device: Device) -> PrometheusTarget:
-        secondary = device.monitoring.secondary if device.monitoring else None
-        url = (secondary.endpoint if secondary and secondary.endpoint else "").strip()
+        target = device.monitoring.target if device.monitoring else None
+        url = (target.endpoint if target and target.endpoint else "").strip()
         if not url:
             if device.ip is None:
                 raise ValueError(

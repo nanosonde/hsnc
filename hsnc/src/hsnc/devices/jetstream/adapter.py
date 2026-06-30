@@ -1,9 +1,8 @@
 """TP-Link JetStream managed-switch adapter over SSH/CLI.
 
 Configuration plane only — runtime/monitoring data lives in
-:class:`~hsnc.devices.jetstream.ssh_monitoring.JetStreamSshMonitoringProvider`
-(primary) or :class:`~hsnc.devices.jetstream.snmp_monitoring.JetStreamSnmpMonitoringProvider`
-(secondary). Talks to JetStream switches using the same CLI surface the mock
+:class:`~hsnc.devices.jetstream.snmp_monitoring.JetStreamSnmpMonitoringProvider`
+(SNMPv3). Talks to JetStream switches using the same CLI surface the mock
 container emulates:
 
 * :meth:`fetch_config`  — ``show running-config`` parsed into VLANs and ports

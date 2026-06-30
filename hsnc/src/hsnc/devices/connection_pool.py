@@ -1,6 +1,6 @@
 """The device connection pool.
 
-Keeps one persistent primary (SSH) connection open to every configured device
+Keeps one persistent (SSH) connection open to every configured device
 **at all times**, each supervised by its own thread so a fault on one device
 never affects another. When a connection drops, only that device's supervisor
 reconnects, using exponential backoff. This is what lets the web app stay fast:
@@ -54,7 +54,7 @@ class ConnectionState:
 
 
 class ConnectionPool:
-    """Maintains warm primary connections to all devices, one thread each."""
+    """Maintains warm SSH connections to all devices, one thread each."""
 
     def __init__(
         self,

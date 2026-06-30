@@ -3,8 +3,8 @@
 The device model is split across two stores:
 
 * ``devices.yaml`` holds the **connection profile** (identity + how to reach the
-  device): id, name, kind, site, SSH connection and the optional secondary
-  monitoring channel. See :class:`~.schemas.DeviceSchema`.
+  device): id, name, kind, site, SSH connection and the optional monitoring
+  endpoint override. See :class:`~.schemas.DeviceSchema`.
 * ``desired_config.json`` / ``current_config.json`` hold the **configuration
   payload** (VLANs, ports, SSIDs, firmware, …). See
   :class:`~.schemas.DeviceConfigSchema`.
@@ -20,7 +20,7 @@ from ..entities import (
     Device,
     DeviceConnection,
     MonitoringConfig,
-    SecondaryMonitoring,
+    MonitoringTarget,
     SwitchPort,
     Vlan,
 )
@@ -32,7 +32,6 @@ from .schemas import (
     DeviceSchema,
     MonitoringSchema,
     PortSchema,
-    SecondaryMonitoringSchema,
     VlanSchema,
 )
 
@@ -51,14 +50,13 @@ def profile_to_device(schema: DeviceSchema) -> Device:
     )
     monitoring = (
         MonitoringConfig(
-            source=schema.monitoring.source or "primary",
-            secondary=(
-                SecondaryMonitoring(
-                    type=schema.monitoring.secondary.type,
-                    endpoint=schema.monitoring.secondary.endpoint,
-                    port=schema.monitoring.secondary.port,
+            enabled=schema.monitoring.enabled,
+            target=(
+                MonitoringTarget(
+                    endpoint=schema.monitoring.endpoint,
+                    port=schema.monitoring.port,
                 )
-                if schema.monitoring.secondary is not None
+                if schema.monitoring.endpoint or schema.monitoring.port
                 else None
             ),
         )
@@ -97,15 +95,16 @@ def device_to_profile(device: Device) -> DeviceSchema:
         ),
         monitoring=(
             MonitoringSchema(
-                source=device.monitoring.source,
-                secondary=(
-                    SecondaryMonitoringSchema(
-                        type=device.monitoring.secondary.type,
-                        endpoint=device.monitoring.secondary.endpoint,
-                        port=device.monitoring.secondary.port,
-                    )
-                    if device.monitoring.secondary is not None
-                    else None
+                enabled=device.monitoring.enabled,
+                endpoint=(
+                    device.monitoring.target.endpoint
+                    if device.monitoring.target is not None
+                    else ""
+                ),
+                port=(
+                    device.monitoring.target.port
+                    if device.monitoring.target is not None
+                    else 0
                 ),
             )
             if device.monitoring is not None

@@ -1,4 +1,4 @@
-"""Tests for the OpenWrt Prometheus (secondary) monitoring provider."""
+"""Tests for the OpenWrt Prometheus monitoring provider."""
 
 from __future__ import annotations
 
@@ -8,7 +8,7 @@ from hsnc.devices.openwrt.prometheus_monitoring import (
     PrometheusTarget,
     parse_metrics,
 )
-from hsnc.entities import Device, MonitoringConfig, SecondaryMonitoring
+from hsnc.entities import Device, MonitoringConfig, MonitoringTarget
 from hsnc.enums import ConnectionType, DeviceKind, DeviceStatus
 from hsnc.value_objects import IpAddress
 
@@ -24,13 +24,13 @@ wifi_network_bitrate{vap="wlan1",mac="AA:BB:CC:00:00:02"} 866
 """
 
 
-def _device(secondary: SecondaryMonitoring | None = None, ip: str = "10.0.0.5") -> Device:
+def _device(target: MonitoringTarget | None = None, ip: str = "10.0.0.5") -> Device:
     return Device(
         id="ap-1",
         name="AP One",
         kind=DeviceKind.ACCESS_POINT,
         ip=IpAddress(ip),
-        monitoring=MonitoringConfig(source="secondary", secondary=secondary),
+        monitoring=MonitoringConfig(target=target),
     )
 
 
@@ -47,7 +47,7 @@ def test_fetch_status_reports_uptime_from_boot_time() -> None:
     provider = OpenWrtPrometheusMonitoringProvider(
         settings=PrometheusSettings(), fetcher=lambda target: _METRICS
     )
-    result = provider.fetch_status(_device(SecondaryMonitoring(type="prometheus")))
+    result = provider.fetch_status(_device())
     assert result.status is DeviceStatus.CONNECTED
     assert result.uptime_seconds == 3600  # 4600 - 1000
     assert result.model == "x86_64"
@@ -59,7 +59,7 @@ def test_fetch_status_falls_back_to_node_uptime_seconds() -> None:
         settings=PrometheusSettings(),
         fetcher=lambda target: "node_uptime_seconds 1234\n",
     )
-    result = provider.fetch_status(_device(SecondaryMonitoring(type="prometheus")))
+    result = provider.fetch_status(_device())
     assert result.uptime_seconds == 1234
 
 
@@ -67,7 +67,7 @@ def test_fetch_clients_dedupes_by_mac() -> None:
     provider = OpenWrtPrometheusMonitoringProvider(
         settings=PrometheusSettings(), fetcher=lambda target: _METRICS
     )
-    clients = provider.fetch_clients(_device(SecondaryMonitoring(type="prometheus")))
+    clients = provider.fetch_clients(_device())
     macs = {str(c.mac) for c in clients}
     assert macs == {"AA:BB:CC:00:00:01", "AA:BB:CC:00:00:02"}
     assert all(c.connection is ConnectionType.WIRELESS for c in clients)
@@ -84,9 +84,7 @@ def test_settings_resolve_uses_configured_endpoint() -> None:
 
     settings = PrometheusSettings(token="global-token")
     provider = OpenWrtPrometheusMonitoringProvider(settings=settings, fetcher=fetcher)
-    device = _device(
-        SecondaryMonitoring(type="prometheus", endpoint="http://10.9.9.9:9100/metrics")
-    )
+    device = _device(MonitoringTarget(endpoint="http://10.9.9.9:9100/metrics"))
     provider.fetch_status(device)
     assert captured[0].url == "http://10.9.9.9:9100/metrics"
     assert captured[0].token == "global-token"
@@ -98,7 +96,7 @@ def test_settings_resolve_derives_endpoint_from_ip() -> None:
     provider = OpenWrtPrometheusMonitoringProvider(
         settings=settings, fetcher=lambda t: captured.append(t) or ""
     )
-    provider.fetch_status(_device(SecondaryMonitoring(type="prometheus")))
+    provider.fetch_status(_device())
     assert captured[0].url == "http://10.0.0.5:9100/metrics"
 
 
@@ -109,5 +107,5 @@ def test_settings_from_env_per_device_token() -> None:
             "HSNC_DEVICE_AP_1_PROMETHEUS_TOKEN": "per-device",
         }
     )
-    target = settings.resolve(_device(SecondaryMonitoring(type="prometheus")))
+    target = settings.resolve(_device())
     assert target.token == "per-device"
