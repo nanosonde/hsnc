@@ -1,6 +1,10 @@
 # ADR 0010 — Pluggable secondary monitoring with strict selection
 
-**Status:** Accepted
+**Status:** Superseded by [ADR 0015](0015-monitoring-transports.md)
+
+> Superseded: the `primary | secondary` source model described here was removed.
+> The monitoring plane no longer uses SSH at all; the transport is fixed by
+> platform (Prometheus for OpenWrt, SNMPv3 for JetStream). See ADR 0015.
 
 ## Context
 

@@ -15,11 +15,12 @@ supersedes the old one. Derived from the project's commit history.
 | [0007](0007-declarative-staged-apply.md) | Declarative config with staged review/apply/revert | Accepted |
 | [0008](0008-read-only-by-default.md) | Read-only mode on by default | Accepted |
 | [0009](0009-secrets-from-environment.md) | Secrets only from the environment | Accepted |
-| [0010](0010-pluggable-secondary-monitoring.md) | Pluggable secondary monitoring, strict selection | Accepted |
+| [0010](0010-pluggable-secondary-monitoring.md) | Pluggable secondary monitoring, strict selection | Superseded by 0015 |
 | [0011](0011-per-platform-device-packages.md) | Per-platform device packages | Accepted |
 | [0012](0012-docker-s6-two-processes.md) | Docker + s6-overlay, two supervised processes | Accepted |
 | [0013](0013-mock-and-fakes.md) | Mock providers + fake SSH containers for dev/test | Accepted |
 | [0014](0014-agpl-license.md) | AGPL-3.0-or-later license | Accepted |
+| [0015](0015-monitoring-transports.md) | Monitoring plane: non-SSH transports per platform | Accepted (supersedes 0010) |
 
 ## Format
 

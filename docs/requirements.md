@@ -24,8 +24,10 @@ history. Each requirement traces to one or more ADRs.
 ### Monitoring
 - **FR-9** Poll devices in the background for status and connected clients.
   (ADR 0006)
-- **FR-10** Select per device where live data comes from: primary (SSH),
-  secondary (Prometheus/SNMPv3) or none; selection is strict. (ADR 0010)
+- **FR-10** Poll live data over a non-SSH transport fixed by platform: a
+  Prometheus exporter for OpenWrt gateways/APs and SNMPv3 for JetStream switches;
+  SSH is reserved for configuration. Polling can be disabled per device. (ADR
+  0015)
 - **FR-11** Dashboard, topology and live searchable/paginated client list.
 - **FR-12** Show device status connected / disconnected / unknown; degrade
   gracefully when a device is unreachable. (ADR 0006)
