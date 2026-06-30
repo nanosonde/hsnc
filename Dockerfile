@@ -52,9 +52,10 @@ RUN useradd --create-home --uid 10001 appuser
 WORKDIR /app
 
 COPY --from=build /dist/*.whl /tmp/
-# Install both wheels. The backend gets the [ssh] extra so real-device mode
-# (paramiko) works out of the box; gunicorn is a dependency of both.
-RUN python -m pip install --no-cache-dir "$(ls /tmp/hsnc-*.whl)[ssh]" $(ls /tmp/hsnc_web-*.whl) \
+# Install both wheels. The backend gets the [ssh] + [snmp] extras so real-device
+# mode works out of the box: paramiko for the SSH configuration plane and pysnmp
+# for the JetStream SNMPv3 monitoring plane. gunicorn is a dependency of both.
+RUN python -m pip install --no-cache-dir "$(ls /tmp/hsnc-*.whl)[ssh,snmp]" $(ls /tmp/hsnc_web-*.whl) \
     && rm -f /tmp/*.whl
 
 # Seed configuration baked into the image; copied into the volume on first run.

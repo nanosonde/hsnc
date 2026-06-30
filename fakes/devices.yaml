@@ -1,0 +1,49 @@
+# Device inventory for the fake simulators (fakes/docker-compose.yml).
+#
+# Mounted into the optional `controller` profile at /data/config/devices.yaml so
+# the real device drivers target the mock containers over the compose network:
+#   * configuration plane  -> SSH on the mock IPs (port 22)
+#   * monitoring plane      -> Prometheus (OpenWrt) / SNMPv3 (JetStream)
+#
+# `ip` must be a real IP address (the controller validates it), so the mock
+# containers are pinned to static addresses on the compose network:
+#   * mock-openwrt   -> 172.28.0.11  (SSH 22, Prometheus 9100)
+#   * mock-jetstream -> 172.28.0.12  (SSH 22, SNMPv3 161)
+# Both planes resolve from `ip`: SSH connects to it, the Prometheus endpoint
+# derives http://172.28.0.11:9100/metrics, and SNMP polls 172.28.0.12:161.
+#
+# Passwords and SNMP keys are NOT stored here — they come from the environment
+# (see the controller service in fakes/docker-compose.yml).
+devices:
+  - id: gateway-1
+    name: ER605
+    kind: gateway
+    ip: 172.28.0.11
+    site_id: default
+    connection:
+      username: root
+      port: 22
+    monitoring:
+      enabled: true
+
+  - id: ap-1
+    name: EAP245
+    kind: access_point
+    ip: 172.28.0.11
+    site_id: default
+    connection:
+      username: root
+      port: 22
+    monitoring:
+      enabled: true
+
+  - id: switch-1
+    name: TL-SG2210P
+    kind: switch
+    ip: 172.28.0.12
+    site_id: default
+    connection:
+      username: admin
+      port: 22
+    monitoring:
+      enabled: true

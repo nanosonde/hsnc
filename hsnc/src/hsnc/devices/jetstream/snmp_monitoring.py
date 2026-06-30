@@ -11,11 +11,14 @@ from the environment (``HSNC_SNMP_*`` globals and per-device
 
 ``pysnmp`` is an optional dependency (the ``snmp`` extra) and is imported lazily,
 so the rest of the application — and the unit tests, which inject a fake
-:class:`SnmpClient` — run without it installed.
+:class:`SnmpClient` — run without it installed. Modern ``pysnmp`` (6/7) ships only
+the asyncio hlapi, so the synchronous :class:`SnmpClient` methods drive it via
+:func:`asyncio.run`.
 """
 
 from __future__ import annotations
 
+import asyncio
 import os
 from collections.abc import Callable
 from dataclasses import dataclass, replace
@@ -221,13 +224,18 @@ def _mac_from_fdb_oid(oid: str) -> MacAddress | None:
 
 
 class _PysnmpClient:
-    """Default :class:`SnmpClient` backed by ``pysnmp`` (lazy import)."""
+    """Default :class:`SnmpClient` backed by ``pysnmp`` (lazy import).
+
+    ``pysnmp`` 6/7 expose only the asyncio hlapi, so the synchronous
+    :class:`SnmpClient` methods build a coroutine and run it with
+    :func:`asyncio.run`.
+    """
 
     def __init__(self, target: SnmpTarget) -> None:
         self._target = target
 
     def _usm(self):  # pragma: no cover - requires pysnmp + network
-        from pysnmp.hlapi import (
+        from pysnmp.hlapi.v3arch.asyncio import (
             UsmUserData,
             usmAesCfb128Protocol,
             usmDESPrivProtocol,
@@ -258,57 +266,79 @@ class _PysnmpClient:
         )
 
     def get(self, oids: list[str]) -> dict[str, str]:  # pragma: no cover - needs network
-        from pysnmp.hlapi import (
+        return asyncio.run(self._get_async(oids))
+
+    async def _get_async(  # pragma: no cover - needs network
+        self, oids: list[str]
+    ) -> dict[str, str]:
+        from pysnmp.hlapi.v3arch.asyncio import (
             ContextData,
             ObjectIdentity,
             ObjectType,
             SnmpEngine,
             UdpTransportTarget,
-            getCmd,
+            get_cmd,
         )
 
         engine = SnmpEngine()
-        transport = UdpTransportTarget((self._target.host, self._target.port))
         result: dict[str, str] = {}
-        for oid in oids:
-            error_indication, error_status, _idx, var_binds = next(
-                getCmd(
+        try:
+            transport = await UdpTransportTarget.create(
+                (self._target.host, self._target.port)
+            )
+            usm = self._usm()
+            context = ContextData()
+            for oid in oids:
+                error_indication, error_status, _idx, var_binds = await get_cmd(
                     engine,
-                    self._usm(),
+                    usm,
                     transport,
-                    ContextData(),
+                    context,
                     ObjectType(ObjectIdentity(oid)),
                 )
-            )
-            if error_indication or error_status:
-                continue
-            for name, value in var_binds:
-                result[str(name)] = value.prettyPrint()
+                if error_indication or error_status:
+                    continue
+                for name, value in var_binds:
+                    result[str(name)] = value.prettyPrint()
+        finally:
+            engine.close_dispatcher()
         return result
 
     def walk(self, oid: str) -> list[tuple[str, str]]:  # pragma: no cover - needs network
-        from pysnmp.hlapi import (
+        return asyncio.run(self._walk_async(oid))
+
+    async def _walk_async(  # pragma: no cover - needs network
+        self, oid: str
+    ) -> list[tuple[str, str]]:
+        from pysnmp.hlapi.v3arch.asyncio import (
             ContextData,
             ObjectIdentity,
             ObjectType,
             SnmpEngine,
             UdpTransportTarget,
-            nextCmd,
+            walk_cmd,
         )
 
         engine = SnmpEngine()
-        transport = UdpTransportTarget((self._target.host, self._target.port))
         pairs: list[tuple[str, str]] = []
-        for error_indication, error_status, _idx, var_binds in nextCmd(
-            engine,
-            self._usm(),
-            transport,
-            ContextData(),
-            ObjectType(ObjectIdentity(oid)),
-            lexicographicMode=False,
-        ):
-            if error_indication or error_status:
-                break
-            for name, value in var_binds:
-                pairs.append((str(name), value.prettyPrint()))
+        try:
+            transport = await UdpTransportTarget.create(
+                (self._target.host, self._target.port)
+            )
+            usm = self._usm()
+            context = ContextData()
+            async for error_indication, error_status, _idx, var_binds in walk_cmd(
+                engine,
+                usm,
+                transport,
+                context,
+                ObjectType(ObjectIdentity(oid)),
+                lexicographicMode=False,
+            ):
+                if error_indication or error_status:
+                    break
+                for name, value in var_binds:
+                    pairs.append((str(name), value.prettyPrint()))
+        finally:
+            engine.close_dispatcher()
         return pairs

@@ -32,7 +32,7 @@ ssh = [
     "paramiko>=3.4",
 ]
 snmp = [
-    "pysnmp>=5.0",
+    "pysnmp>=7.0",
 ]
 
 [project.scripts]
