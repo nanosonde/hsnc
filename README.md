@@ -115,8 +115,11 @@ The container runs **two long-running processes** under s6-overlay that share
   connections** and no database: every read and write is an HTTP call to the
   backend.
 - **api / backend** (`gunicorn hsnc.backend.wsgi:app`) — the always-on owner of
-  **all device I/O**. It keeps a persistent SSH connection warm to every device
-  (each on its own thread, reconnecting independently on loss), serves the `/api`
+  **all device I/O**. SSH is the configuration plane only, so connections are
+  **demand-driven**: the backend opens a device's SSH connection lazily on the
+  first configuration command, keeps it warm (one supervisor thread per device,
+  reconnecting on loss) for repeat requests, and closes it gracefully once it has
+  been idle past `HSNC_SSH_IDLE_TIMEOUT` (default 300s). It serves the `/api`
   surface the web app calls, and is the **only writer** of the runtime database
   (`runtime.db`, SQLite in WAL mode), the apply history (`history.jsonl`), the
   staged configuration (`desired_config.json`) and the baseline
@@ -126,8 +129,8 @@ The container runs **two long-running processes** under s6-overlay that share
   configuration into `current_config.json` and records an `action="baseline"`
   event so the starting point is visible and survives restarts.
 
-Keeping connections in the backend — warm and out of the request path — is what
-makes the web UI fast: an unreachable device can never slow down or block a page.
+Keeping device I/O in the backend — off the request path — is what makes the web
+UI fast: an unreachable device can never slow down or block a page.
 
 ## CLI
 
@@ -321,12 +324,17 @@ from the baked-in template on first run if one does not already exist.
 | `HSNC_DATA_DIR`          | `data`  | Path to runtime data directory (`desired_config.json`, `current_config.json`, `runtime.db`, `history.jsonl`) |
 | `HSNC_USE_MOCK_DEVICES`  | `1`     | `1` mock providers, `0` real SSH drivers |
 | `HSNC_POLL_INTERVAL`     | `30`    | Backend poll-cycle interval (seconds)    |
+| `HSNC_SSH_IDLE_TIMEOUT`  | `300`   | Close a warm config-plane SSH connection after it has been idle this many seconds (keepalives don't reset the timer) |
 | `HSNC_RETENTION_DAYS`    | `30`    | Drop runtime rows older than N days (`0` disables pruning) |
 | `HSNC_BASELINE_ON_START` | `1`     | `1` read each device's live config into `current_config.json` at startup and record it as the history baseline; `0` skip |
 | `HSNC_LOG_LEVEL`         | `info`  | Application log verbosity: `debug`, `info`, `warning`, `error`, `critical` (case-insensitive; unknown values fall back to `info`) |
 | `HSNC_API_BASE_URL`      | `http://127.0.0.1:8081` | Backend URL the web frontend calls |
 | `HSNC_API_TOKEN`         | _(unset)_ | Bearer token the backend requires and the frontend sends (empty = no auth) |
 | `HSNC_SECRET_KEY`        | `dev-insecure-change-me` | Flask session secret (set in production) |
+| `HSNC_SESSION_COOKIE_SECURE` | `0`  | Frontend: `1` sets the `Secure` flag on session cookies (HTTPS-only); leave `0` for plain-HTTP deployments |
+| `HSNC_MAX_UPLOAD_MB`     | `25`    | Frontend: reject request bodies (e.g. backup imports) larger than this many MB |
+| `HSNC_LOGIN_MAX_ATTEMPTS`| `5`     | Frontend: failed logins allowed per source within the window before throttling |
+| `HSNC_LOGIN_WINDOW_SECONDS` | `300` | Frontend: rolling window (seconds) for the failed-login throttle |
 
 ### Logging
 
@@ -402,6 +410,7 @@ Passwords are resolved only from the environment and are never stored in
 | `HSNC_DEVICE_<ID>_SSH_DEBUG`    | _(unset)_      | Per-device paramiko transport `DEBUG` (post-handshake); overrides the global flag either direction |
 | `HSNC_SSH_TRANSCRIPT_DEBUG`     | `0`            | Global: mirror the full SSH transcript (commands + output) to the log; independent of `HSNC_LOG_LEVEL` |
 | `HSNC_DEVICE_<ID>_SSH_TRANSCRIPT_DEBUG` | _(unset)_ | Per-device transcript mirroring; overrides the global flag either direction |
+| `HSNC_SSH_LOG_LINES`            | `5000`         | Max lines kept in each connection's in-memory SSH transcript ring buffer (the **View SSH connection** popup); older lines are dropped |
 
 Per-device host, port and username come from the `connection` block in
 `config/devices.yaml`:

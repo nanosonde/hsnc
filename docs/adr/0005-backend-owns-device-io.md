@@ -12,8 +12,9 @@ and device-owning code.
 
 ## Decision
 
-Make the **backend** the always-on owner of all device I/O. It keeps a warm SSH
-connection per device (each on its own thread, reconnecting independently),
+Make the **backend** the always-on owner of all device I/O. It opens each
+device's configuration-plane SSH connection on demand and keeps it warm (one
+supervisor thread per device, reconnecting independently) until it falls idle,
 records polled telemetry, and exposes a JSON `/api`. The frontend holds no
 connections and calls the backend over HTTP for every read and write. The
 bespoke broker IPC was removed and replaced by this unified REST backend.

@@ -65,12 +65,13 @@ flowchart LR
 The container runs two supervised processes (s6-overlay) sharing `/data`:
 
 - **web** — `gunicorn hsncweb.wsgi:app`; no connections, no DB.
-- **api / backend** — `gunicorn hsnc.backend.wsgi:app`; keeps SSH warm per device
-  (own thread, independent reconnect), the only writer of `runtime.db`,
-  `history.jsonl`, `desired_config.json`, `current_config.json`.
+- **api / backend** — `gunicorn hsnc.backend.wsgi:app`; opens config-plane SSH on
+  demand and keeps it warm per device (own supervisor thread, independent
+  reconnect), closing it once idle past `HSNC_SSH_IDLE_TIMEOUT`; the only writer of
+  `runtime.db`, `history.jsonl`, `desired_config.json`, `current_config.json`.
 
-Keeping connections warm and out of the request path is what keeps the UI fast:
-an unreachable device can never block a page.
+Keeping device I/O off the request path is what keeps the UI fast: an unreachable
+device can never block a page.
 
 ## Config vs telemetry storage
 
