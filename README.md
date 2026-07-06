@@ -15,17 +15,8 @@ access points** and **JetStream managed switches** (with VLANs).
   (`hsnc/`) and a server-rendered web **frontend** (`hsncweb/`) that share no code
 - **Packaging:** Docker container running supervised processes (web + REST backend) via s6-overlay
 
-> **Status:** The real device drivers (OpenWrt SSH/UCI and JetStream SSH/CLI) are
-> **fully implemented** and exercised by the test suite against the throwaway
-> device simulators in [`fakes/`](fakes/), which answer **both planes** — the SSH
-> configuration plane and the non-SSH monitoring plane (a Prometheus exporter for
-> OpenWrt, an SNMPv3 agent for JetStream). The bundled `docker-compose.yml` targets
-> real hardware (`HSNC_USE_MOCK_DEVICES=0`) and requires your own
-> `config/devices.yaml`. For a hardware-free trial, set `HSNC_USE_MOCK_DEVICES=1`
-> to serve the runtime/monitoring plane from a built-in **mock provider** with a
-> sample inventory — VLAN, port and wireless editing plus the review/apply
-> workflow then work end-to-end without any devices. To exercise the **real**
-> drivers without hardware, run the [fake simulators](#quick-start-try-it-out-with-the-fake-simulators).
+> **Status:** See [`STATUS.md`](STATUS.md) for a current breakdown of what works
+> and what doesn't.
 
 ## Documentation
 
